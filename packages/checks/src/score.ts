@@ -43,6 +43,12 @@ export function scoreFindings(findings: Finding[]): CredibilityResult {
   else if (lookalike) score = Math.min(score, 15);
   else if (hasDanger) score = Math.min(score, 35);
   else if (official) score = Math.max(score, 90);
+  // One weak signal (e.g. domain age alone) can't make a site "trustworthy": hacked old domains
+  // host phishing too. It takes a strong signal (official, .gov.in/.bank.in, the brand's own ENS
+  // name) or at least two independent ones.
+  const goods = counted.filter((f) => f.severity === "good");
+  const strong = goods.some((f) => f.check === "phishing");
+  if (!onList && !lookalike && !hasDanger && !strong && goods.length < 2) score = Math.min(score, 74);
   score = Math.round(Math.max(0, Math.min(100, score)));
 
   const level: CredibilityResult["level"] =

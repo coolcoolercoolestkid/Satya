@@ -15,7 +15,7 @@ export interface Brand {
 
 export const SEED_BRANDS: Brand[] = [
   { name: "Uniswap", officialDomains: ["uniswap.org"], keywords: ["uniswap"], category: "crypto" },
-  { name: "MetaMask", officialDomains: ["metamask.io"], keywords: ["metamask"], category: "crypto" },
+  { name: "MetaMask", officialDomains: ["metamask.io", "metamask.com"], keywords: ["metamask"], category: "crypto" },
   { name: "OpenSea", officialDomains: ["opensea.io"], keywords: ["opensea"], category: "crypto" },
   { name: "Coinbase", officialDomains: ["coinbase.com"], keywords: ["coinbase"], category: "crypto" },
   { name: "Binance", officialDomains: ["binance.com"], keywords: ["binance"], category: "crypto" },

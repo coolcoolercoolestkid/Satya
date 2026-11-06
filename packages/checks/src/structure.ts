@@ -10,6 +10,16 @@ import type { Finding, PageSnapshot } from "./types.js";
 
 /** Platforms where anyone can publish a site in minutes, under the platform's domain. */
 export const FREE_HOSTS = [
+  // Hosting, dynamic DNS and gateway services where each subdomain is a different owner.
+  "wixstudio.com", "gitbook.io", "typedream.app", "workers.dev", "arweave.net", "godaddysites.com",
+  "duckdns.org", "appspot.com", "weeblysite.com", "r2.dev", "dweb.link", "square.site", "my.id", "biz.id",
+  "xsph.ru", "swtest.ru", "co.vu", "plesk.page", "pantheonsite.io", "cf-ipfs.com", "cprapid.com",
+  "amazonaws.com", "ddns.net", "webcindario.com", "azurewebsites.net", "azurefd.net", "tw1.ru", "ewp.live", "tmweb.ru",
+  "usrfiles.com", "appdomain.cloud", "trycloudflare.com", "teachable.com", "filesusr.com", "yolasite.com",
+  "nftstorage.link", "w3s.link", "surge.sh", "infura-ipfs.io", "ipfs.io", "gitlab.io", "ngrok-free.app",
+  "ngrok.io", "fly.dev", "deno.dev", "no-ip.org", "hopto.org", "zapto.org", "sytes.net", "myshopify.com",
+  "wordpress.com", "notion.site", "jimdosite.com", "mystrikingly.com", "site123.me", "webnode.page",
+  "replit.dev", "repl.co", "atwebpages.com",
   "vercel.app", "netlify.app", "github.io", "pages.dev", "web.app", "firebaseapp.com",
   "weebly.com", "wixsite.com", "blogspot.com", "000webhostapp.com", "glitch.me", "replit.app",
   "repl.co", "herokuapp.com", "onrender.com", "framer.website", "webflow.io", "carrd.co",

@@ -133,6 +133,12 @@ export const normalizeAddress = (a: string) => a.trim().toLowerCase();
  * at 128 KB, and without this the ~15,000 listed "*.pages.dev" sites would all land in one
  * bucket.)
  */
+/**
+ * Shared hosts the scoring learned about after the 6 Nov 2026 publish. Bucket grouping must match
+ * what is on Arkiv, so these join the grouping at the next full republish of every list.
+ */
+const GROUPING_ADDED_LATER = new Set(["azurefd.net", "replit.dev"]);
+
 export const SHARED_HOST_SUFFIXES = [
   ...new Set([
     ...FREE_HOSTS,
@@ -148,7 +154,7 @@ export const SHARED_HOST_SUFFIXES = [
     "r.appspot.com", "ipfs.dweb.link", "ipfs.cf-ipfs.com", "ipfs.nftstorage.link", "ipfs.w3s.link",
     "ipfs.infura-ipfs.io", "temp.swtest.ru", "cloud-object-storage.appdomain.cloud", "atwebpages.com",
   ]),
-].sort((a, b) => b.length - a.length);
+].filter((h) => !GROUPING_ADDED_LATER.has(h)).sort((a, b) => b.length - a.length);
 
 /** The site a domain belongs to: its registrable domain, or one label under a shared host. */
 export function siteOf(domain: string): string {
