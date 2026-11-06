@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { initAnonAadhaar, proveAnonAadhaarTest, verifyAnonAadhaar } from "../src/index.js";
+import { initAnonAadhaar, MAX_QR_AGE_DAYS, proveAnonAadhaarTest, verifyAnonAadhaar } from "../src/index.js";
 
 // Full Anon Aadhaar round trip with TEST data. Downloads the 612 MB proving key.
 // Run: LIVE_AADHAAR=1 HOLDER=0xYourWallet pnpm vitest run test/anonAadhaar.live.test.ts
@@ -26,8 +26,12 @@ describe.runIf(process.env.LIVE_AADHAAR)("Anon Aadhaar (test data)", () => {
     const proof = await proveAnonAadhaarTest(qrData, HOLDER);
     writeFileSync(join(dataDir, `proof-${HOLDER.toLowerCase()}.json`), proof);
 
-    const ok = await verifyAnonAadhaar(proof, HOLDER);
+    const ok = await verifyAnonAadhaar(proof, HOLDER, { maxQrAgeDays: MAX_QR_AGE_DAYS });
     expect(ok).toMatchObject({ ok: true, test: true, ageAbove18: true });
+
+    // The same proof, checked as if a week had passed since the QR was signed, is refused.
+    const later = await verifyAnonAadhaar(proof, HOLDER, { maxQrAgeDays: MAX_QR_AGE_DAYS, now: new Date(Date.now() + 7 * 86_400_000) });
+    expect(later.ok).toBe(false);
 
     const otherWallet = await verifyAnonAadhaar(proof, "0x2222222222222222222222222222222222222222");
     expect(otherWallet).toEqual({ ok: false, reason: "Proof was made for a different wallet." });

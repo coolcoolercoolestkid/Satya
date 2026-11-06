@@ -32,7 +32,7 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | Deeper check on request: domain age (RDAP), HTTPS certificate type (Cert Spotter), ENS identity and proofs | ✅ |
 | AI-written-text detector (Pangram or GPTZero, your own key) | ✅ off by default |
 | Identity: demo DigiLocker issuer (EIP-712 signed claims), proofs on Arkiv owned by the holder | ✅ |
-| Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ⚠️ code and verification done; full browser prove → publish round trip not yet run (612 MB proving key) |
+| Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ✅ real TEST-data proof made, published to Arkiv and read back verified ([record](https://rabdi.explorer.arkiv.network/entity/0x2bc7745c1a37db51b75f81b50a084a828719aaab9a00eed8a4459d8a0d2c2afd)); proving inside the browser not yet timed |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
 | MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
 | zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |

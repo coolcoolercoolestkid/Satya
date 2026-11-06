@@ -143,7 +143,7 @@ function decodeReveal(value: string | undefined): string | undefined {
   let n = BigInt(value);
   const bytes: number[] = [];
   while (n > 0n) {
-    bytes.unshift(Number(n & 0xffn));
+    bytes.push(Number(n & 0xffn)); // revealed text is packed least significant byte first
     n >>= 8n;
   }
   return new TextDecoder().decode(new Uint8Array(bytes)).trim() || undefined;
