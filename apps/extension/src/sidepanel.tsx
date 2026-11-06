@@ -2,7 +2,7 @@ import { analyzePage, buildEvidence, credentialFindings, metadataFindings, score
 import { checkIdentity, checkSiteEns, defaultIdentityDeps, ensNamesOnPage } from "@satya/identity";
 import { checkRegistry, lookupVerifiedContracts, SOURCIFY_ON_ARKIV, type RegistryResult, type VerifiedContract } from "@satya/registry";
 import { freeHostOf } from "@satya/checks";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { checkImageCredentials, type ImageCheck } from "./c2pa";
 import { BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
@@ -15,12 +15,6 @@ declare const __BUILD_TIME__: string;
 const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
-const STAMP: Record<CredibilityResult["level"], string> = {
-  trustworthy: "Verified",
-  unverified: "No red flags",
-  careful: "Caution",
-  "high-risk": "Flagged",
-};
 const MEANING: Record<CredibilityResult["level"], string> = {
   trustworthy: "Independent evidence vouches for this site.",
   unverified: "Nothing wrong found, but nothing vouches for it yet.",
@@ -161,14 +155,14 @@ function Actions({ s, onDeep }: { s: Done; onDeep: () => void }) {
             onClick={onDeep}
             title={`Sends the domain to its registry (age), Cert Spotter (certificates) and the Internet Archive (history), and re-reads page images for Content Credentials${s.ensNames ? ", plus ENS names to Ethereum/Arkiv" : ""}.`}
           >
-            Deeper check
+            Run full check
           </button>
         )}
         <button className="btn ghost" onClick={() => void save()} disabled={busy} title="Save the page text, a screenshot and this receipt to a file; anchor only its fingerprint on Arkiv.">
           {busy ? "Saving…" : "Save evidence"}
         </button>
       </div>
-      {!s.deep && <div className="hint">Deeper check adds age, certificate, history and image checks. Off by default for privacy.</div>}
+      {!s.deep && <div className="hint">Full check adds domain age, certificate, history, ENS and image checks.</div>}
       {saved && (
         <div className="hint">
           Saved · <span className="mono">{saved.slice(0, 12)}…</span>{" "}
@@ -216,7 +210,7 @@ function checklist(s: Done): Row[] {
 
   const shared = f.find((x) => /^Hosted on .+, where anyone can make a site$/.test(x.title));
   const deepRow = (label: string, re: RegExp) => {
-    if (!s.deep) return rows.push({ label, status: "skip", value: "Deeper check" });
+    if (!s.deep) return rows.push({ label, status: "skip", value: "Full check" });
     const hit = pick("records", re)[0];
     if (shared && hit?.severity === "info" && /hosting service/.test(hit.detail ?? "")) return rows.push({ label, status: "value", value: "Belongs to the host" });
     rows.push({ label, status: hit ? (hit.severity === "good" ? "pass" : hit.severity === "info" ? "value" : sev([hit])) : "value", value: hit ? shortValue(hit.title) : "Unknown" });
@@ -281,36 +275,110 @@ function reason(s: Done): string {
   if (bad.length) return `${bad.length} warning sign${bad.length > 1 ? "s" : ""} below.`;
   if (vouch.length) return `Vouched for by: ${vouch.map((x) => x.title.toLowerCase()).slice(0, 2).join("; ")}.`;
   if (shared) return `${shared.title.replace(/^Hosted on /, "Hosted on ").replace(/, where anyone can make a site$/, "")}, where anyone can make a site, so nothing vouches for this one yet.`;
-  return s.deep ? "Nothing wrong, but no independent evidence (age, company certificate, history) vouches for it." : "Nothing wrong so far. Deeper check looks up its age, certificate and history.";
+  return s.deep ? "Nothing wrong, but no independent evidence (age, company certificate, history) vouches for it." : "Nothing wrong so far, but the quick check can't vouch for a site. Run the full check.";
+}
+
+/** Score as a ring: the arc is the score out of 100. */
+function ScoreRing({ score, level }: { score: number; level: CredibilityResult["level"] }) {
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg className={`ring ${level}`} viewBox="0 0 84 84" width="84" height="84" role="img" aria-label={`Score ${score} out of 100`}>
+      <circle cx="42" cy="42" r={r} className="ring-track" />
+      <circle cx="42" cy="42" r={r} className="ring-arc" strokeDasharray={`${(score / 100) * c} ${c}`} transform="rotate(-90 42 42)" />
+      <text x="42" y="44" className="ring-num">{score}</text>
+      <text x="42" y="58" className="ring-of">/ 100</text>
+    </svg>
+  );
+}
+
+/** How much evidence the score rests on: the number of findings that moved it. */
+function confidence(s: Done): { label: string; tone: "low" | "mid" | "high" } {
+  const n = s.result.breakdown?.steps.length ?? 0;
+  // Decisive evidence: on a list, imitating a brand, or an official / .gov.in / .bank.in / brand ENS domain.
+  const decisive = s.result.findings.some(
+    (f) => (f.check === "phishing" && f.severity === "good") || (f.severity === "danger" && /^(Known phishing site|Listed as a |Wallet on |Looks like .+, but isn't$)/.test(f.title)),
+  );
+  if (decisive) return { label: n > 1 ? `High confidence · ${n} signals` : "High confidence", tone: "high" };
+  if (n >= 3) return { label: `High confidence · ${n} signals`, tone: "high" };
+  if (n === 2) return { label: "Medium confidence · 2 signals", tone: "mid" };
+  return { label: n === 1 ? "Low confidence · 1 signal" : "Low confidence · no evidence yet", tone: "low" };
+}
+
+/** The score built up step by step: start, each finding's points as a bar, any overriding rule, result. */
+function Breakdown({ s }: { s: Done }) {
+  const b = s.result.breakdown;
+  if (!b) return null;
+  const max = Math.max(25, ...b.steps.map((x) => Math.abs(x.points)));
+  return (
+    <section className="sec">
+      <div className="eyebrow">Why {s.result.score}</div>
+      <table className="bd">
+        <tbody>
+          <tr className="bd-row base">
+            <td className="bd-label">Every site starts at</td>
+            <td className="bd-bar" />
+            <td className="bd-pts">{b.base}</td>
+          </tr>
+          {b.steps.map((x, i) => (
+            <tr key={i} className={`bd-row ${x.points > 0 ? "up" : "down"}`} title={`${x.label} · ${x.source}`}>
+              <td className="bd-label">{x.label}</td>
+              <td className="bd-bar">
+                <span style={{ width: `${(Math.abs(x.points) / max) * 100}%` }} />
+              </td>
+              <td className="bd-pts">{x.points > 0 ? `+${x.points}` : `−${-x.points}`}</td>
+            </tr>
+          ))}
+          {!b.steps.length && (
+            <tr className="bd-row empty">
+              <td className="bd-label" colSpan={3}>
+                {s.deep ? "Nothing found for or against it: no age, company certificate, history or red flag." : "Quick check found nothing for or against it. Full check looks up age, certificate and history."}
+              </td>
+            </tr>
+          )}
+          {b.rule && (
+            <tr className="bd-row rule">
+              <td className="bd-label" colSpan={2}>{b.rule}</td>
+              <td className="bd-pts">{b.sum}→{s.result.score}</td>
+            </tr>
+          )}
+          <tr className="bd-row total">
+            <td className="bd-label">Score</td>
+            <td className="bd-bar" />
+            <td className="bd-pts">{s.result.score}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
 }
 
 function Receipt({ s, onDeep }: { s: Done; onDeep: () => void }) {
   const { result } = s;
   const wrong = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && (f.severity === "danger" || f.severity === "warning"));
-  const vouches = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && f.severity === "good");
   const ai = result.findings.filter((f) => f.check === "ai" && !f.title.startsWith("Checked "));
   const people = result.findings.filter((f) => f.check === "identity" && f.severity !== "info");
   const notes = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && f.severity === "info");
+  const conf = confidence(s);
   return (
     <>
       <article className="receipt">
         <div className="site">{s.host}</div>
         <div className="verdict">
-          <div className={`seal ${result.level}`}>
-            <div>
-              <div className="seal-score">{result.score}</div>
-              <div className="seal-of">/ 100</div>
+          <ScoreRing score={result.score} level={result.level} />
+          <div className="verdict-text">
+            <div className={`chip ${result.level}`}>{result.label}</div>
+            <p className="meaning">{MEANING[result.level]}</p>
+            <div className="meta">
+              <span className={`conf ${conf.tone}`}>{conf.label}</span>
+              <span className="mode">{s.deep ? "Full check" : "Quick check"}</span>
             </div>
           </div>
-          <div>
-            <span className={`stamp ${result.level}`}>{STAMP[result.level]}</span>
-            <p className="meaning">{MEANING[result.level]}</p>
-            <p className="why">{reason(s)}</p>
-          </div>
         </div>
+        <p className="why">{reason(s)}</p>
+        <Breakdown s={s} />
         <Section title={`What's wrong (${wrong.length})`} items={wrong} tabId={s.tabId} />
         <Checks rows={checklist(s)} />
-        <Section title="What vouches for it" items={vouches} tabId={s.tabId} />
         <Section title="People on this page" items={people} tabId={s.tabId} />
         <Section title="AI content · not scored" items={ai} tabId={s.tabId} />
         <HowChecked s={s} notes={notes} />
@@ -320,8 +388,29 @@ function Receipt({ s, onDeep }: { s: Done; onDeep: () => void }) {
   );
 }
 
+/** Asked once: may Satya run the full check on every page? */
+function Consent({ onChoose }: { onChoose: (full: boolean) => void }) {
+  return (
+    <div className="consent">
+      <b>Run full checks automatically?</b>
+      <p>
+        A quick check only sends Arkiv a bucket number, so it can catch scams but can't vouch for a site. A full check
+        also looks up the domain's age (its registry), certificates (Cert Spotter), history (Internet Archive) and ENS name.
+        Those services see the site's name.
+      </p>
+      <div className="row">
+        <button className="btn" onClick={() => onChoose(true)}>Turn on full checks</button>
+        <button className="btn ghost" onClick={() => onChoose(false)}>Keep it private</button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [state, setState] = useState<State>({ status: "loading" });
+  /** undefined until the user chooses; then remembered. */
+  const [full, setFull] = useState<boolean | undefined | null>(null);
+  const fullRef = useRef(false);
 
   const run = useCallback(async (deep = false) => {
     setState({ status: "loading" });
@@ -392,11 +481,23 @@ function App() {
     });
   }, []);
 
+  const choose = (v: boolean) => {
+    fullRef.current = v;
+    setFull(v);
+    void chrome.storage.local.set({ fullChecks: v });
+    void run(v);
+  };
+
   useEffect(() => {
-    void run(false);
-    const onActivated = () => void run(false);
+    void chrome.storage.local.get("fullChecks").then((o) => {
+      const v = o.fullChecks as boolean | undefined;
+      fullRef.current = v === true;
+      setFull(v);
+      void run(v === true);
+    });
+    const onActivated = () => void run(fullRef.current);
     const onUpdated = (_id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-      if (info.status === "complete" && tab.active) void run(false);
+      if (info.status === "complete" && tab.active) void run(fullRef.current);
     };
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.onUpdated.addListener(onUpdated);
@@ -410,14 +511,22 @@ function App() {
     <main>
       <header className="top">
         <div className="brand">Satya <span className="brand-hi">सत्य</span></div>
-        <button className="icon" onClick={() => void run(false)} aria-label="Re-check this page" title="Re-check">↻</button>
+        <button className="icon" onClick={() => void run(fullRef.current)} aria-label="Re-check this page" title="Re-check">↻</button>
       </header>
+      {full === undefined && <Consent onChoose={choose} />}
       {state.status === "loading" && <div className="receipt loading"><div className="eyebrow">Checking…</div></div>}
       {state.status === "unsupported" && (
         <div className="receipt"><p className="none">Open a website to check it. If you just reloaded Satya, reload the page too.</p></div>
       )}
       {state.status === "done" && <Receipt s={state} onDeep={() => void run(true)} />}
-      <footer className="build">build {__BUILD_TIME__}</footer>
+      <footer className="build">
+        {full !== null && full !== undefined && (
+          <button className="link" onClick={() => choose(!full)}>
+            Full checks: {full ? "on" : "off"} · turn {full ? "off" : "on"}
+          </button>
+        )}
+        <div>build {__BUILD_TIME__}</div>
+      </footer>
     </main>
   );
 }

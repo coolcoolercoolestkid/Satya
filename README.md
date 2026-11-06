@@ -17,8 +17,9 @@ in two directions:
    **Arkiv** and linked to their **ENS** name. When a page shows that ENS name, Satya shows the
    verified proofs, and warns if a profile claims an ENS name that points to someone else.
 
-It is **private by default**: when a page opens, the only thing that leaves your browser is a
-two-character bucket id (see [CROPS](#crops-a-checker-that-learns-nothing-about-your-browsing)).
+It is **private by default**: until you choose otherwise, the only thing that leaves your browser
+is a two-character bucket id. On first open Satya asks once whether to run full checks
+automatically, and says exactly which services would see the site's name (see [CROPS](#crops-a-checker-that-learns-nothing-about-your-browsing)).
 
 Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -60,9 +61,16 @@ from a line on the receipt, with its source.
 6. **AI content and people's proofs are shown but don't move the score**: AI-made content isn't a
    scam by itself.
 
-By default only the private checks run, so most unknown sites show **50, "No red flags found"**.
-That's honest: nothing has vouched for them yet. **Run deeper check** adds domain age,
-certificate and archive history, which is what moves a real site up.
+The panel shows the whole calculation as a chart: the starting 50, every finding's points as a
+bar, any rule that overrode the sum, and the result. It also shows a **confidence** label (how many
+independent signals the score rests on), so a 50 with no evidence is labelled *low confidence*
+instead of looking like a verdict.
+
+The quick (private) check can only catch scams, not vouch for a site, so with it most unknown sites
+stay at **50**. The **full check** (asked once, then automatic; also one click on the panel) adds
+domain age, certificates, archive history and the brand's ENS name, which is what moves a real
+site up. Sites on shared hosts (vercel.app, github.io…) stay at 50 by design: the host's age and
+certificate say nothing about who made that one site.
 
 How well this separates real sites from phishing sites is measured, not assumed: see
 [docs/evaluation.md](docs/evaluation.md).
@@ -149,7 +157,7 @@ If the page shows wallet addresses, the same is done for up to 5 of them.
 your wallet, or anything you type. All other checks (lookalike domains, scam wording, risky
 forms, gov/bank domain rules) run locally against rules and lists shipped with the extension.
 
-**Only when you click "Run deeper check"** (the panel says exactly what each step sends):
+**Only when you turn on full checks, or click "Run full check"** (the panel says exactly what each step sends):
 - the site's domain to [rdap.org](https://rdap.org) (when it was registered) and
   [Cert Spotter](https://sslmate.com/certspotter/) (its HTTPS certificates);
 - ENS names written on the page to a public Ethereum node (publicnode.com), and the wallet

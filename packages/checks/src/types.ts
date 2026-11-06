@@ -61,4 +61,12 @@ export interface CredibilityResult {
   level: "trustworthy" | "unverified" | "careful" | "high-risk";
   label: string;
   findings: Finding[];
+  /** How the score was reached: start, each finding's points, the raw sum and any rule that overrode it. */
+  breakdown?: { base: number; steps: ScoreStep[]; sum: number; rule?: string };
+}
+
+export interface ScoreStep {
+  label: string;
+  points: number;
+  source: string;
 }
