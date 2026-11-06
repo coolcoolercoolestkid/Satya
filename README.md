@@ -24,8 +24,11 @@ Built at **ETHGlobal Mumbai 2026**. Design and build plan: [ARCHITECTURE.md](ARC
 | Check engine: past records (domain age via RDAP, sanctioned wallets) | ✅ |
 | Check engine: possibly AI (Pangram or GPTZero, your own key) | ✅ |
 | Browser extension side panel + on-page highlights | ✅ |
-| Identity proofs (Anon Aadhaar, mock DigiLocker) | ⏳ |
-| Arkiv records, ENS lookups | ⏳ |
+| Identity: mock DigiLocker issuer, one signed claim per fact (18+, nationality, ID valid) | ✅ |
+| Arkiv: proof records owned by the holder, expiring with the credential | ✅ |
+| ENS: profile lookup, handle linking, impersonation warnings | ✅ |
+| Web app: get verified, link profiles, check anyone, "Verify with Satya" demo | ✅ |
+| Identity: Anon Aadhaar (real ZK) | ⏳ |
 
 ## Public data used
 
@@ -51,6 +54,10 @@ pnpm data    # download the public lists
 pnpm test
 pnpm build
 ```
+
+Web app (identity): copy `apps/web/.env.example` to `apps/web/.env`, then
+`pnpm --filter @satya/web dev` and open http://localhost:5173. Publishing proofs needs a
+little test GLM from the [Arkiv faucet](https://hub.arkiv.network/faucet).
 
 Load the extension: Chrome → `chrome://extensions` → Developer mode → **Load unpacked** →
 select `apps/extension/dist`.
