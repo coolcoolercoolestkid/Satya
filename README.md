@@ -1,37 +1,74 @@
 # Satya
 
-**सत्य: truth. A browser extension that shows whether the website or person in front of
-you is real, with reasons and proofs, not guesses.**
+**सत्य: truth. "Can I trust what's in front of me?", answered with reasons and proofs, not
+guesses.**
 
-AI can fake any face, ID or website. Satya checks the page you're on and shows a
-credibility card:
+AI can fake any face, ID or website. Satya is a browser extension plus a web app that works
+in two directions:
 
-- **Is this site real?** Known phishing lists, lookalike clones of real brands,
-  sanctioned wallets (OFAC), fake government and bank domains.
-- **What is it saying?** Highlights scam promises ("guaranteed daily returns", "enter your
-  seed phrase") and content that may be AI-generated.
-- **Is this person real?** If they link an ENS name, Satya shows their zero-knowledge
-  proofs (18+, Indian, owns this handle) without any personal data.
+1. **Websites.** Open any site and the Satya side panel scores it 0 to 100. Every point lost
+   comes with a reason and a source: known phishing sites and sanctioned wallets (from a public
+   registry Satya mirrors on Arkiv), lookalike clones of real brands, fake government or bank
+   domains, scam wording ("guaranteed daily returns", "KYC pending, account blocked today"),
+   pages asking for your OTP, UPI PIN, card or seed phrase, forms that send what you type to
+   another site, and fake app downloads. Scam sentences are highlighted on the page itself.
+2. **People.** Anyone can prove a fact such as "18+" with an **Anon Aadhaar** zero-knowledge
+   proof (no Aadhaar number, name or birthday revealed), tied to their wallet, stored on
+   **Arkiv** and linked to their **ENS** name. When a page shows that ENS name, Satya shows the
+   verified proofs, and warns if a profile claims an ENS name that points to someone else.
 
-Built at **ETHGlobal Mumbai 2026**. Design and build plan: [ARCHITECTURE.md](ARCHITECTURE.md).
+It is **private by default**: when a page opens, the only thing that leaves your browser is a
+two-character bucket id (see [CROPS](#crops-a-checker-that-learns-nothing-about-your-browsing)).
+
+Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Status
 
 | Part | Status |
 |---|---|
-| Check engine: phishing / lookalike domains | ✅ |
-| Check engine: scam promises (incl. India-specific patterns) | ✅ |
-| Check engine: past records (domain age via RDAP, sanctioned wallets) | ✅ |
-| Check engine: possibly AI (Pangram or GPTZero, your own key) | ✅ |
-| Check engine: page structure (OTP/UPI PIN/seed fields, forms to other sites, APKs), gov/bank domains, certificate type | ✅ |
-| MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
-| zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design](docs/zktls.md) |
-| Browser extension side panel + on-page highlights | ✅ |
-| Identity: mock DigiLocker issuer, one signed claim per fact (18+, nationality, ID valid) | ✅ |
-| Arkiv: proof records owned by the holder, expiring with the credential | ✅ |
+| Extension side panel: score, reasons with sources, on-page highlights | ✅ |
+| Checks: lookalike domains, scam wording incl. India-specific scams, risky forms and fields, gov/bank domain rules, fake app downloads | ✅ (run locally) |
+| **Arkiv public scam registry**: MetaMask phishing list + OFAC sanctioned wallets, hashed into 256 buckets, private lookup | ✅ live on Rabdi testnet, verified 256/256 buckets per list |
+| Deeper check on request: domain age (RDAP), HTTPS certificate type (Cert Spotter), ENS identity and proofs | ✅ |
+| AI-written-text detector (Pangram or GPTZero, your own key) | ✅ off by default |
+| Identity: demo DigiLocker issuer (EIP-712 signed claims), proofs on Arkiv owned by the holder | ✅ |
+| Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ⚠️ code and verification done; full browser prove → publish round trip not yet run (612 MB proving key) |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
-| Web app: get verified, link profiles, check anyone, "Verify with Satya" demo | ✅ |
-| Identity: Anon Aadhaar (real ZK) | ⏳ |
+| MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
+| zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |
+
+## Satya on Arkiv
+
+Satya **mirrors public scam lists that Ethereum users depend on** (MetaMask's phishing list,
+which wallets use to block drainer sites, and the US Treasury's sanctioned-wallet list) onto
+Arkiv, in a form anyone can read without revealing what they're checking.
+
+- **Publisher wallet:** `0x0D341d00bB9c2327033f447b45Ebb8712521E736`
+  ([explorer](https://rabdi.explorer.arkiv.network/address/0x0D341d00bB9c2327033f447b45Ebb8712521E736))
+- **Network:** Arkiv Rabdi testnet, chain ID 7794095
+- **Records:** 256 per source, 7-day expiry, attributes and hashing in [arkiv/schema.md](arkiv/schema.md)
+- **Problems we hit:** [arkiv/friction.md](arkiv/friction.md)
+
+**Fetch a live bucket yourself** (no install, no key). This asks for bucket `3f`, exactly
+what the extension sends:
+
+```bash
+curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":["arkiv.schema = str('"'"'satya_scam_bucket_v1'"'"') AND bucket = str('"'"'3f'"'"') AND $owner = addr(0x0D341d00bB9c2327033f447b45Ebb8712521E736) ORDER BY published:u64 DESC",{"select":{"key":true,"expiresAt":true,"attributes":{"source":true,"bucket":true,"date":true,"count":true,"sourceSha256":true,"sourceUrl":true}},"limit":"0x4"}]}'
+```
+
+It returns the newest record per source for that bucket: source, date, number of hashes,
+and the SHA-256 and URL of the source file it was built from.
+
+**Check a domain or wallet the way the extension does, and verify the registry against the
+official lists** (after `pnpm install`):
+
+```bash
+pnpm --filter @satya/registry publish-registry lookup openmsea.io
+pnpm --filter @satya/registry publish-registry verify ofac
+```
+
+People's proofs (`satya_proofs_v1`) are owned by each person's own wallet and expire with the
+credential; see [arkiv/schema.md](arkiv/schema.md).
 
 ## Public data used
 
@@ -98,23 +135,35 @@ Requires Node ≥ 22 and pnpm.
 
 ```bash
 pnpm install
-pnpm data    # download the public lists
+pnpm data    # download the offline fallback copies of the public lists
 pnpm test
 pnpm build
 ```
 
-Web app (identity): copy `apps/web/.env.example` to `apps/web/.env`, then
-`pnpm --filter @satya/web dev` and open http://localhost:5173. Publishing proofs needs a
-little test GLM from the [Arkiv faucet](https://hub.arkiv.network/faucet).
+- **Extension:** Chrome → `chrome://extensions` → Developer mode → **Load unpacked** →
+  select `apps/extension/dist`. Pin Satya and click it to open the side panel.
+- **Web app (identity):** copy `apps/web/.env.example` to `apps/web/.env`, then
+  `pnpm --filter @satya/web dev` and open http://localhost:5173. Publishing proofs needs a
+  little test GLM from the [Arkiv faucet](https://hub.arkiv.network/faucet).
+- **Demo scam pages** (local only, clearly labelled, forms send nothing): `pnpm demo`, then
+  open http://localhost:5180.
+- **Republish the registry** (needs a funded key in `packages/registry/.env`):
+  `pnpm --filter @satya/registry publish-registry publish ofac` (and `metamask`).
 
-Load the extension: Chrome → `chrome://extensions` → Developer mode → **Load unpacked** →
-select `apps/extension/dist`.
+## Built with Claude Code
 
-## AI usage disclosure
+Satya was built with help from **Claude Code** (Anthropic's AI coding assistant). It:
 
-AI coding assistants were used during this hackathon for scaffolding, boilerplate and code
-suggestions. Product design, data choices, integration decisions and testing were done by
-the author. (Update this section with specifics before submission, as ETHGlobal requires.)
+- wrote most of the TypeScript code (check engine, extension, web app, Arkiv registry and
+  publisher, MCP server) and the tests, from our instructions;
+- researched data sources and their licences (and flagged the RBI list as not reusable),
+  Arkiv's SDK and limits, and the Anon Aadhaar library;
+- drafted this README, `arkiv/schema.md`, `docs/zktls.md` and the demo pages, and logged
+  `arkiv/friction.md` as problems happened.
+
+We decided what to build and for whom, chose the sponsors and data sources, set the rules
+(private by default, every finding has a source, never label a real person, never fake a
+working feature), funded the publisher wallet, and reviewed and tested the results.
 
 ## License
 

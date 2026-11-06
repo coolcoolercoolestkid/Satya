@@ -1,0 +1,85 @@
+# Satya's Arkiv records
+
+Satya stores two kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
+RPC `https://rpc.rabdi.db-chain.testnet.arkiv.network`, explorer
+`https://rabdi.explorer.arkiv.network`). Both are written through `defineSchema` from
+`@arkiv-network/sdk`, so every entity carries the attribute `arkiv.schema` with the schema's
+name.
+
+## 1. `satya_scam_bucket_v1`: the public scam registry
+
+Public scam and sanctions lists, hashed and split into 256 buckets so the extension can check a
+site without telling anyone which site it is.
+
+- **Owner:** Satya's publisher wallet `0x0D341d00bB9c2327033f447b45Ebb8712521E736`. Readers only
+  accept records owned by this wallet, so nobody else can plant entries.
+- **How many:** 256 records per source per publish run (one per bucket, empty buckets included,
+  so "no match" is an answer, not a missing record).
+- **Expiry:** 7 days (`ExpirationTime.fromDays(7)`). The publisher is re-run before that.
+- **Code:** [`packages/registry/src/index.ts`](../packages/registry/src/index.ts), publisher in
+  [`packages/registry/scripts/publish.ts`](../packages/registry/scripts/publish.ts).
+
+| Attribute | Type | Indexed | Meaning |
+|---|---|---|---|
+| `type` | str | yes | `"domain"` or `"address"` |
+| `source` | str | yes | `"metamask-phishing"` or `"ofac-sdn"` |
+| `bucket` | str | yes | Two lowercase hex characters, `"00"` to `"ff"` |
+| `date` | str | yes | Publish date, `YYYY-MM-DD` (UTC) |
+| `published` | u64 | yes | Publish time in unix seconds; all 256 records of one run share it. Readers take the newest per source. |
+| `sourceSha256` | str | no | SHA-256 of the exact source file that run read |
+| `sourceUrl` | str | no | Where that file was downloaded from |
+| `count` | u64 | no | Number of hashes in this bucket |
+| `hashes` | bytes | no | Sorted 32-byte SHA-256 hashes, concatenated |
+
+**Hashing and buckets**
+
+- An entry is normalised (lowercase; domains without a trailing dot or `www.`) and hashed with
+  plain SHA-256, so anyone can reproduce it: `sha256("openmsea.io")`.
+- **Addresses** go in the bucket given by the first byte of their own hash.
+- **Domains** go in the bucket of their *site*: the registrable domain (`login.evil.com` →
+  `evil.com`), or, on shared hosts such as `pages.dev`, `netlify.app` or `vercel.app`, one label
+  under the host (`scam.pages.dev`). So one bucket lookup covers a site and all its
+  subdomains. The record stores the hash of each full listed entry.
+- The extension hashes the visited host and each parent up to the site, and checks those
+  hashes against the bucket on the user's computer.
+
+**Sources and licences**
+
+| Source id | List | Licence | Entries (6 Nov 2026) |
+|---|---|---|---|
+| `metamask-phishing` | [MetaMask eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect) `blacklist`, minus anything on its `whitelist` | DBAD 1.2 (reuse allowed with attribution) | 115,817 domains |
+| `ofac-sdn` | US Treasury OFAC SDN list, official [`SDN.XML`](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML): every Ethereum-format (`0x…`) digital currency address | US government work, public domain | 127 addresses |
+
+Run manifests with all 256 entity keys per source are in
+[`packages/registry/runs/`](../packages/registry/runs/).
+
+**Verify it yourself**
+
+```bash
+pnpm --filter @satya/registry publish-registry verify ofac      # rebuilds from the official file, compares all 256 buckets
+pnpm --filter @satya/registry publish-registry lookup openmsea.io
+```
+
+## 2. `satya_proofs_v1`: proofs about people
+
+One record per proven fact about a person (for example "18+"). No personal data: only the
+holder's wallet, which fact, who vouched for it, and the proof itself.
+
+- **Owner:** the holder's own wallet. They publish it from the web app with their browser
+  wallet, and readers only accept records whose owner is the `holder`.
+- **Expiry:** signed attestations expire when the credential does; Anon Aadhaar proofs live for
+  Arkiv's maximum (about 6 months), since the proof itself doesn't expire.
+- **Code:** [`packages/identity/src/arkiv.ts`](../packages/identity/src/arkiv.ts).
+
+| Attribute | Type | Indexed | Meaning |
+|---|---|---|---|
+| `holder` | addr | yes | The wallet the fact is about |
+| `claim` | str | yes | `age_over_18`, `nationality` or `id_valid` |
+| `issuer` | addr | yes | Who vouched: the demo DigiLocker key, or `0x…aada` for Anon Aadhaar |
+| `kind` | str | yes | `"attestation"` (EIP-712 signed claim) or `"anon-aadhaar"` (zero-knowledge proof) |
+| `payload` | bytes | no | The signed attestation or serialized Anon Aadhaar proof (JSON, UTF-8) |
+| `nullifier` | str | yes, optional | Anon Aadhaar only. The same for one card every time it proves for Satya, unrelated to the Aadhaar number. Lets anyone see that one card verified more than one wallet; Satya only counts the first. |
+
+Every reader re-verifies the payload: signatures for attestations; for Anon Aadhaar, the
+zero-knowledge proof, that it was made for Satya (nullifier seed) and for this wallet (signal).
+Proofs are only accepted for publishing if the Aadhaar QR was signed in the last 3 days.

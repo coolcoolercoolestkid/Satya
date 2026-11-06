@@ -5,6 +5,7 @@
  *   pnpm --filter @satya/registry publish-registry publish ofac [--file SDN.XML] [--dry-run]
  *   pnpm --filter @satya/registry publish-registry publish metamask [--file config.json] [--dry-run]
  *   pnpm --filter @satya/registry publish-registry verify ofac|metamask [--file …]
+ *   pnpm --filter @satya/registry publish-registry lookup <domain or 0x address>
  *
  * Downloads a public list from its official source, hashes and buckets it, and writes one
  * Arkiv record per bucket (256 per source), owned by the Satya publisher wallet and expiring
@@ -31,6 +32,10 @@ import {
   ScamBucket,
   sha256Hex,
   SOURCES,
+  bucketOf,
+  domainCandidates,
+  matchInRecords,
+  SATYA_PUBLISHER,
 } from "../src/index.js";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -187,6 +192,19 @@ async function verify(which: string, file?: string) {
   if (problems.length) process.exitCode = 1;
 }
 
+/** Does what the extension does: hash, fetch one bucket, match locally. Needs no key. */
+async function lookup(value: string) {
+  const isAddress = /^0x[0-9a-fA-F]{40}$/.test(value);
+  const type = isAddress ? "address" : "domain";
+  const bucket = await bucketOf(type, value);
+  console.log(`${type} ${value} → bucket ${bucket} (the only thing sent to Arkiv)`);
+  const records = await fetchBucket(bucket, SATYA_PUBLISHER, accessKey());
+  for (const r of records) console.log(`  record ${r.key} · ${r.source} · ${r.hashes.size} hashes · published ${r.date} · source SHA-256 ${r.sourceSha256.slice(0, 16)}…`);
+  const hits = await matchInRecords(type, isAddress ? [value] : domainCandidates(value), records);
+  for (const h of hits) console.log(`  MATCH: ${h.value} is on ${h.source.label}`);
+  if (!hits.length) console.log("  No match in Satya's registry.");
+}
+
 function keygen() {
   const existing = process.env.SATYA_PUBLISHER_KEY;
   if (existing && isHex(existing)) {
@@ -205,4 +223,5 @@ const file = fileIdx >= 0 ? rest[fileIdx + 1] : undefined;
 if (cmd === "keygen") keygen();
 else if (cmd === "publish" && which) await publish(which, file, rest.includes("--dry-run"));
 else if (cmd === "verify" && which) await verify(which, file);
-else console.log("Usage: keygen | publish <ofac|metamask> [--file path] [--dry-run] | verify <ofac|metamask> [--file path]");
+else if (cmd === "lookup" && which) await lookup(which);
+else console.log("Usage: keygen | publish <ofac|metamask> [--file path] [--dry-run] | verify <ofac|metamask> [--file path] | lookup <domain|address>");
