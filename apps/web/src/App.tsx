@@ -9,10 +9,11 @@ import {
 } from "@satya/identity";
 import { useEffect, useState } from "react";
 import type { Address } from "viem";
+import { AadhaarTab } from "./AadhaarTab";
 import { loadVerifiedProofs, type CheckedProof } from "./proofs";
 import { ARKIV_EXPLORER, ARKIV_FAUCET, ARKIV_KEY, connect, ensNameOf, ensText, provider, resolveTarget, short } from "./wallet";
 
-type Tab = "verify" | "link" | "check" | "company";
+type Tab = "verify" | "aadhaar" | "link" | "check" | "company";
 
 const PERSONAS: { label: string; doc: DocumentDetails }[] = [
   { label: "Adult · India", doc: { dateOfBirth: "1999-04-12", nationality: "IN", documentExpiry: "2031-06-30" } },
@@ -292,6 +293,7 @@ export function App() {
   }, [tab]);
   const tabs: [Tab, string][] = [
     ["verify", "Get verified"],
+    ["aadhaar", "Aadhaar (ZK)"],
     ["link", "Link profiles"],
     ["check", "Check anyone"],
     ["company", "Verify with Satya"],
@@ -318,11 +320,12 @@ export function App() {
         ))}
       </nav>
       {tab === "verify" && <GetVerified wallet={wallet} />}
+      {tab === "aadhaar" && <AadhaarTab address={wallet.address} connect={wallet.connect} />}
       {tab === "link" && <LinkProfile wallet={wallet} />}
       {tab === "check" && <CheckSomeone />}
       {tab === "company" && <CompanyDemo wallet={wallet} />}
       <footer className="muted small">
-        Claims are signed by a demo issuer standing in for DigiLocker. Records live on Arkiv's testnet. No trackers, no
+        Claims come from a demo issuer standing in for DigiLocker, or from Anon Aadhaar test cards. Records live on Arkiv's testnet. No trackers, no
         Satya server.
       </footer>
     </main>

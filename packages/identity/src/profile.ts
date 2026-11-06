@@ -2,6 +2,7 @@ import type { Finding, PageSnapshot } from "@satya/checks";
 import { createPublicClient, http, type Address } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { normalize } from "viem/ens";
+import { verifyAnonAadhaar } from "./anonAadhaar.js";
 import { fetchProofRecords, type ProofRecord } from "./arkiv.js";
 import { CLAIM_LABELS, verifyAttestation } from "./credential.js";
 
@@ -142,6 +143,32 @@ export async function checkIdentity(page: PageSnapshot, deps: IdentityDeps): Pro
     }
     let verified = 0;
     for (const r of records) {
+      if (r.anonAadhaar) {
+        const v = await verifyAnonAadhaar(r.anonAadhaar, address);
+        if (v.ok && v.ageAbove18) {
+          verified++;
+          findings.push({
+            check: "identity",
+            severity: "good",
+            title: `${name}: 18+ Aadhaar holder${v.state ? ` · ${v.state}` : ""}`,
+            detail: v.test
+              ? "Zero-knowledge proof made from Anon Aadhaar TEST data, not a real Aadhaar card."
+              : "Zero-knowledge proof from a UIDAI-signed Aadhaar QR. No Aadhaar number, name or birthday revealed.",
+            source: "Anon Aadhaar ZK proof, record on Arkiv",
+            weight: 0,
+          });
+        } else if (!v.ok) {
+          findings.push({
+            check: "identity",
+            severity: "warning",
+            title: `${name}: an Aadhaar proof failed`,
+            detail: v.reason,
+            source: "Anon Aadhaar verifier, record on Arkiv",
+            weight: 10,
+          });
+        }
+        continue;
+      }
       if (!r.signed) continue;
       const v = await verifyAttestation(r.signed, address, deps.now);
       const label = CLAIM_LABELS[r.signed.attestation.claim]?.(r.signed.attestation.value) ?? r.signed.attestation.claim;

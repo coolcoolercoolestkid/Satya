@@ -3,6 +3,7 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { eq } from "@arkiv-network/sdk/query";
 import { addr, bytes, defineSchema, str } from "@arkiv-network/sdk/schema";
 import { custom, hexToString, http, stringToBytes, type Address, type EIP1193Provider, type Hex } from "viem";
+import { ANON_AADHAAR_ISSUER } from "./anonAadhaar.js";
 import { parseAttestation, serializeAttestation, type SignedAttestation } from "./credential.js";
 
 /**
@@ -70,11 +71,28 @@ export async function publishAttestation(writer: Writer, signed: SignedAttestati
   );
 }
 
+/** Stores an Anon Aadhaar proof. The proof has no expiry of its own, so it lives for Arkiv's maximum. */
+export async function publishAnonAadhaar(writer: Writer, holder: Address, serializedProof: string) {
+  return writer.createEntity(
+    SatyaProofs,
+    {
+      holder: addr(holder),
+      claim: "age_over_18",
+      issuer: addr(ANON_AADHAAR_ISSUER),
+      kind: "anon-aadhaar",
+      payload: stringToBytes(serializedProof),
+    },
+    { expiration: ExpirationTime.max() },
+  );
+}
+
 export interface ProofRecord {
   key: Hex;
   owner: Address;
   kind: string;
   signed?: SignedAttestation;
+  /** Serialized Anon Aadhaar proof, for kind "anon-aadhaar". */
+  anonAadhaar?: string;
 }
 
 /**
@@ -96,6 +114,13 @@ export async function fetchProofRecords(holder: Address, accessKey = ""): Promis
       owner: row.$owner as Address,
       kind: String(row.kind.value),
     };
+    if (record.kind === "anon-aadhaar") {
+      try {
+        record.anonAadhaar = hexToString(row.payload.value as Hex);
+      } catch {
+        /* unreadable payload */
+      }
+    }
     if (record.kind === "attestation") {
       try {
         record.signed = parseAttestation(hexToString(row.payload.value as Hex));

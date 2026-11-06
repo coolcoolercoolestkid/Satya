@@ -4,3 +4,6 @@ packages:
   - "scripts/*"
 allowBuilds:
   esbuild: true
+  blake-hash: false
+overrides:
+  "@zk-email/helpers>snarkjs": "0.7.6"

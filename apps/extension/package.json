@@ -10,9 +10,10 @@
   },
   "dependencies": {
     "@satya/checks": "workspace:*",
+    "@satya/identity": "workspace:*",
+    "buffer": "^6.0.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@satya/identity": "workspace:*"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
