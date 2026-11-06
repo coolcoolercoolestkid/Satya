@@ -92,3 +92,17 @@ describe("India scam patterns", () => {
     expect(ids("Your computer has been infected. Call Microsoft support")).toContain("tech-support");
   });
 });
+
+describe("task, fee and doubling scams", () => {
+  const ids = (text: string) => checkScamText(page("https://x.example", { text })).map((f) => f.source.replace("Satya scam rule: ", ""));
+  it("catches the common wordings", () => {
+    expect(ids("Complete simple tasks and earn ₹5,000 daily")).toContain("task-job");
+    expect(ids("To unlock withdrawal, first deposit ₹2,999 as a security fee")).toContain("fee-to-withdraw");
+    expect(ids("Your money will double in 7 days")).toContain("multiply-money");
+  });
+  it("leaves ordinary wording alone", () => {
+    expect(ids("Complete tasks to earn badges and streaks")).toEqual([]);
+    expect(ids("Withdrawals are free. Deposit any amount from ₹100.")).toEqual([]);
+    expect(ids("Our team doubled in size this year")).toEqual([]);
+  });
+});

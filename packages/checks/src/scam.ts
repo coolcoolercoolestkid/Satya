@@ -44,7 +44,8 @@ export const SCAM_RULES: ScamRule[] = [
     id: "multiply-money",
     title: "Promises to multiply your money",
     detail: "Offers to double or triple money are almost always scams.",
-    pattern: /\b(double|triple|2x|3x|5x|10x|100x)\s+(your\s+)?(money|investment|crypto|funds|bitcoin|btc|eth|deposit)\b/i,
+    pattern:
+      /\b(double|triple|2x|3x|5x|10x|100x)\s+(your\s+)?(money|investment|crypto|funds|bitcoin|btc|eth|deposit)\b|\b(money|investment|funds|deposit)\s+(will\s+)?(get\s+)?(double|triple)[sd]?\b/i,
     severity: "danger",
     weight: 35,
   },
@@ -68,7 +69,8 @@ export const SCAM_RULES: ScamRule[] = [
     id: "fee-to-withdraw",
     title: "Charges a fee before you can withdraw or get paid",
     detail: "Advance fees to release money or start a job are a common fraud in India.",
-    pattern: /\b(pay|deposit)\s+(?:an?\s+|the\s+)?(registration|processing|activation|withdrawal|unlock|tax|clearance)\s+(fee|charge|amount)\b/i,
+    pattern:
+      /\b(pay|deposit)\s+(?:an?\s+|the\s+)?(registration|processing|activation|withdrawal|unlock|tax|clearance|security)\s+(fee|charge|amount|deposit)\b|\b(unlock|release|activate|enable)\s+(your\s+)?(withdrawals?|payouts?|earnings|salary|prize|funds|account)\b.{0,60}\b(deposit|pay|fee)\b|\b(deposit|pay)\s+(₹|rs\.?\s?|inr\s?)?[\d,]+\s+(as\s+)?(an?\s+|the\s+)?(security|registration|processing|activation|withdrawal|unlock|tax|clearance)\s+(fee|deposit|charge|amount)\b/i,
     severity: "danger",
     weight: 30,
   },
@@ -76,7 +78,8 @@ export const SCAM_RULES: ScamRule[] = [
     id: "task-job",
     title: "Looks like a \"task job\" scam",
     detail: "Paid likes, reviews or part-time tasks that later ask for deposits are a major scam in India.",
-    pattern: /\b(part[- ]time|work from home|online)\s+(job|task|work)s?\b.{0,80}(\b(earn|income)\s*(₹|rs\.?|inr)?\s?\d|(₹|\brs\.?\s?|\binr\s?)\d)/i,
+    pattern:
+      /\b(part[- ]time|work from home|online)\s+(job|task|work)s?\b[\s\S]{0,80}?(\b(earn|income)\s*(₹|rs\.?|inr)?\s?\d|(₹|\brs\.?\s?|\binr\s?)\d)|\b(complete|simple|easy)\s+(simple\s+)?tasks?\b[\s\S]{0,40}?\bearn\s+(up to\s+)?(₹|rs\.?\s?|inr\s?)\s?\d|\b(like|subscribe to|rate)\s+(youtube\s+)?(videos|products|hotels|reviews)\b[\s\S]{0,60}?\bearn\s+(up to\s+)?(₹|rs\.?\s?|inr\s?)\s?\d/i,
     severity: "warning",
     weight: 20,
   },

@@ -1,0 +1,8 @@
+{
+  "name": "@satya/demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Labelled fake scam pages for testing and demoing Satya locally. Not real sites.",
+  "scripts": { "start": "node server.mjs" }
+}
