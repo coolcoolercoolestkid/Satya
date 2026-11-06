@@ -4,7 +4,6 @@ import { checkAuthority, checkStructure } from "./structure.js";
 import { checkPhishing, type PhishingContext } from "./phishing.js";
 import { checkAddresses, lookupDomainAge, type AddressLabelList } from "./records.js";
 import { checkNamedEntities, checkScamText } from "./scam.js";
-import { reviewPage, type PageReviewer } from "./review.js";
 import { scoreFindings } from "./score.js";
 import type { CredibilityResult, Finding, PageSnapshot } from "./types.js";
 
@@ -15,7 +14,6 @@ export * from "./structure.js";
 export * from "./domain.js";
 export * from "./phishing.js";
 export * from "./records.js";
-export * from "./review.js";
 export * from "./html.js";
 export * from "./scam.js";
 export * from "./score.js";
@@ -27,8 +25,6 @@ export interface AnalyzeContext {
   namedLists?: { source: string; names: string[] }[];
   addressLists?: AddressLabelList[];
   aiDetector?: AiDetector;
-  /** Optional AI page review (e.g. claudeReviewer). Its signs must quote the page. */
-  reviewer?: PageReviewer;
   /** Set false to skip network lookups (domain age). */
   network?: boolean;
   fetchImpl?: typeof fetch;
@@ -46,14 +42,13 @@ export async function analyzePage(page: PageSnapshot, ctx: AnalyzeContext): Prom
   ];
 
   const network = ctx.network ?? true;
-  const [age, certs, ai, review] = await Promise.all([
+  const [age, certs, ai] = await Promise.all([
     network ? lookupDomainAge(page.url, ctx.fetchImpl) : Promise.resolve(undefined),
     network ? lookupCertificates(page.url, ctx.fetchImpl) : Promise.resolve([]),
     checkAiContent(page.text, ctx.aiDetector),
-    reviewPage(page, findings, ctx.reviewer),
   ]);
   if (age) findings.push(age);
-  findings.push(...certs, ...ai, ...review);
+  findings.push(...certs, ...ai);
 
   return scoreFindings(findings);
 }

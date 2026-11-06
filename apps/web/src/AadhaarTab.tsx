@@ -1,6 +1,9 @@
 import {
   arkivBrowserWriter,
+  MAX_QR_AGE_DAYS,
   proveAnonAadhaarTest,
+  qrSignedAt,
+  qrTooOld,
   publishAnonAadhaar,
   verifyAnonAadhaar,
   type AnonAadhaarCheck,
@@ -32,7 +35,8 @@ export function AadhaarTab({ address, connect }: { address?: Address; connect: (
     if (!address) return;
     setStatus("Verifying the proof…");
     setProof(serialized);
-    setCheck(await verifyAnonAadhaar(serialized, address));
+    // Only proofs from a QR signed in the last 3 days are accepted for publishing.
+    setCheck(await verifyAnonAadhaar(serialized, address, { maxQrAgeDays: MAX_QR_AGE_DAYS }));
     setStatus(undefined);
   };
 
@@ -58,6 +62,9 @@ export function AadhaarTab({ address, connect }: { address?: Address; connect: (
     try {
       const data = await loadJson<{ qrData: string }>(`/test-aadhaar/${card}.json`);
       if (!data) throw new Error("Test QR data missing. Run scripts/import/make-test-aadhaar.mjs.");
+      // Check the QR's own timestamp before spending minutes on a proof.
+      const old = qrTooOld(qrSignedAt(data.qrData));
+      if (old) throw new Error(`${old} (For the test cards, run scripts/import/make-test-aadhaar.mjs to sign fresh ones.)`);
       setStatus("Proving in your browser. The first run downloads a ~600 MB proving key, so this can take several minutes…");
       await finish(await proveAnonAadhaarTest(data.qrData, address));
     } catch (e) {
@@ -88,6 +95,11 @@ export function AadhaarTab({ address, connect }: { address?: Address; connect: (
         <strong>Anon Aadhaar</strong> (by the Ethereum Foundation's privacy team) turns the UIDAI-signed QR on an Aadhaar card
         into a zero-knowledge proof: "18+, lives in Maharashtra", with no Aadhaar number, name or birthday. The proof is
         tied to your wallet, so nobody can reuse it.
+      </p>
+      <p className="muted small">
+        <strong>Fresh QR only:</strong> Satya rejects Aadhaar QR codes signed more than {MAX_QR_AGE_DAYS} days ago. A fresh
+        QR from the mAadhaar app or myAadhaar portal needs an OTP sent to the card owner's registered phone, so an old
+        photo or printout of someone else's card isn't enough.
       </p>
       <p className="muted small">
         This demo uses Anon Aadhaar's <strong>test cards</strong>: UIDAI's official sample data (a fictional person) re-signed

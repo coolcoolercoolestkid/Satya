@@ -41,6 +41,9 @@ interface Core {
   hash(message: string | bigint | number): string;
   productionPublicKeyHash: string;
   testPublicKeyHash: string;
+  convertBigIntToByteArray(n: bigint): Uint8Array;
+  decompressByteArray(bytes: Uint8Array): Uint8Array;
+  timestampToUTCUnix(raw: Uint8Array): number;
 }
 const core = ((aaBuild as { default?: Core }).default ?? aaBuild) as Core;
 
@@ -52,6 +55,28 @@ const core = ((aaBuild as { default?: Core }).default ?? aaBuild) as Core;
  * Satya binds each proof to the holder's wallet by using the wallet address as the proof's
  * signal, so a proof copied to another wallet fails verification.
  */
+
+/**
+ * Satya only accepts Aadhaar QR codes signed in the last 3 days. Getting a fresh QR from the
+ * mAadhaar app or the myAadhaar portal needs an OTP sent to the card owner's registered phone,
+ * so an old photo or printout of someone else's card isn't enough.
+ */
+export const MAX_QR_AGE_DAYS = 3;
+const DAY_MS = 86_400_000;
+
+/** When UIDAI (or the test key) signed an Aadhaar QR, read from the QR itself. Hour precision. */
+export function qrSignedAt(qrData: string): Date {
+  const raw = core.decompressByteArray(core.convertBigIntToByteArray(BigInt(qrData)));
+  return new Date(core.timestampToUTCUnix(raw) * 1000);
+}
+
+/** Why a QR signed at `signedAt` is too old, or undefined if it's fresh enough. */
+export function qrTooOld(signedAt: Date, now = new Date(), maxDays = MAX_QR_AGE_DAYS): string | undefined {
+  const age = now.getTime() - signedAt.getTime();
+  if (age <= maxDays * DAY_MS) return undefined;
+  const days = Math.floor(age / DAY_MS);
+  return `This Aadhaar QR was signed ${days} days ago (${signedAt.toISOString().slice(0, 10)}). Satya only accepts QR codes from the last ${maxDays} days. Download a fresh one from the mAadhaar app or myAadhaar portal; that needs an OTP sent to the card owner's phone.`;
+}
 
 /** Satya's app-wide nullifier seed. The nullifier stops one Aadhaar card proving for many wallets. */
 export const SATYA_NULLIFIER_SEED = 236470799660911371785784n;
@@ -125,7 +150,11 @@ function decodeReveal(value: string | undefined): string | undefined {
 }
 
 /** Verifies a serialized Anon Aadhaar proof and checks it belongs to `holder`. */
-export async function verifyAnonAadhaar(serialized: string, holder: Address): Promise<AnonAadhaarCheck> {
+export async function verifyAnonAadhaar(
+  serialized: string,
+  holder: Address,
+  opts: { maxQrAgeDays?: number; now?: Date } = {},
+): Promise<AnonAadhaarCheck> {
   let pcd: AnonAadhaarPcd;
   try {
     pcd = await core.deserialize(serialized);
@@ -143,6 +172,10 @@ export async function verifyAnonAadhaar(serialized: string, holder: Address): Pr
   if (String(p.signalHash) !== core.hash(holder)) {
     return { ok: false, reason: "Proof was made for a different wallet." };
   }
+  if (opts.maxQrAgeDays !== undefined) {
+    const old = qrTooOld(new Date(Number(p.timestamp) * 1000), opts.now, opts.maxQrAgeDays);
+    if (old) return { ok: false, reason: old };
+  }
   try {
     await initAnonAadhaar();
     if (!(await core.verify(pcd, test))) return { ok: false, reason: "Zero-knowledge proof is invalid." };
@@ -157,4 +190,9 @@ export async function verifyAnonAadhaar(serialized: string, holder: Address): Pr
     nullifier: String(p.nullifier),
     signedAt: new Date(Number(p.timestamp) * 1000),
   };
+}
+
+/** The nullifier inside a serialized proof (same card + Satya's seed = same nullifier). */
+export async function anonAadhaarNullifier(serialized: string): Promise<string> {
+  return String((await core.deserialize(serialized)).proof.nullifier);
 }

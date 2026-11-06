@@ -45,14 +45,14 @@ const addressLists = [
   },
 ];
 
-// 3. Named entities: RBI Alert List (curated in rbi-alert-list.json).
-const rbi = JSON.parse(readFileSync(join(here, "rbi-alert-list.json"), "utf8"));
-const namedLists = [{ source: rbi.source, names: rbi.names }];
+// 3. Named entities: none. The RBI Alert List was removed because RBI's website terms forbid
+// copying or caching its contents without written permission.
+const namedLists = [];
 
 writeFileSync(join(out, "domain-lists.json"), JSON.stringify(domainLists));
 writeFileSync(join(out, "address-lists.json"), JSON.stringify(addressLists));
 writeFileSync(join(out, "named-lists.json"), JSON.stringify(namedLists));
 
 console.log(
-  `phishing domains: ${mm.blacklist.length}, allowlisted: ${mm.whitelist.length}, OFAC ETH addresses: ${ofac.length}, RBI names: ${rbi.names.length}`,
+  `phishing domains: ${mm.blacklist.length}, allowlisted: ${mm.whitelist.length}, OFAC ETH addresses: ${ofac.length}, named lists: 0`,
 );

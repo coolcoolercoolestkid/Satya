@@ -1,4 +1,4 @@
-import { CLAIM_LABELS, fetchProofRecords, verifyAnonAadhaar, verifyAttestation, type ClaimId } from "@satya/identity";
+import { CLAIM_LABELS, earlierWalletForCard, fetchProofRecords, verifyAnonAadhaar, verifyAttestation, type ClaimId } from "@satya/identity";
 import type { Address } from "viem";
 import { ARKIV_KEY } from "./wallet";
 
@@ -18,6 +18,17 @@ export async function loadVerifiedProofs(holder: Address): Promise<CheckedProof[
   for (const r of records) {
     if (r.anonAadhaar) {
       const v = await verifyAnonAadhaar(r.anonAadhaar, holder);
+      const earlier = v.ok ? await earlierWalletForCard(v.nullifier, holder, ARKIV_KEY).catch(() => undefined) : undefined;
+      if (v.ok && earlier) {
+        out.push({
+          key: r.key,
+          claim: "age_over_18",
+          label: "Aadhaar proof",
+          ok: false,
+          detail: `This Aadhaar card already verified another wallet first (${earlier.slice(0, 6)}…${earlier.slice(-4)}). Satya counts one wallet per card.`,
+        });
+        continue;
+      }
       out.push({
         key: r.key,
         claim: "age_over_18",
@@ -26,7 +37,7 @@ export async function loadVerifiedProofs(holder: Address): Promise<CheckedProof[
           : "Aadhaar proof",
         ok: v.ok && v.ageAbove18,
         detail: v.ok
-          ? `Anon Aadhaar zero-knowledge proof${v.test ? " (TEST data, not a real card)" : ""}`
+          ? `Anon Aadhaar zero-knowledge proof${v.test ? " (TEST data, not a real card)" : ""}, QR signed ${v.signedAt.toISOString().slice(0, 10)}`
           : v.reason,
       });
       continue;

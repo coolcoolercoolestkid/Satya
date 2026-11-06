@@ -76,3 +76,7 @@ ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .settings label { display: grid; gap: 4px; margin-top: 8px; }
 .settings select, .settings input { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
 footer { margin-top: 16px; font-size: 12px; }
+
+.privacy { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.privacy .primary { margin: 6px 0; }
+.privacy p { margin: 4px 0; font-size: 12.5px; }

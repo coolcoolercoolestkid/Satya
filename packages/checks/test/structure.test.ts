@@ -106,3 +106,16 @@ describe("task, fee and doubling scams", () => {
     expect(ids("Our team doubled in size this year")).toEqual([]);
   });
 });
+
+describe("privacy by default", () => {
+  it("makes no network request unless the deeper check asks for one", async () => {
+    const { analyzePage } = await import("../src/index.js");
+    const calls: string[] = [];
+    const spy = (async (u: string | URL | Request) => { calls.push(String(u)); return new Response("{}"); }) as typeof fetch;
+    const p = page("https://some-shop.example/login", { text: "Login to your account", hasPasswordField: true });
+    await analyzePage(p, { phishing: { brands: SEED_BRANDS, lists: [] }, network: false, fetchImpl: spy });
+    expect(calls).toEqual([]);
+    await analyzePage(p, { phishing: { brands: SEED_BRANDS, lists: [] }, network: true, fetchImpl: spy });
+    expect(calls.map((u) => new URL(u).hostname).sort()).toEqual(["api.certspotter.com", "rdap.org"]);
+  });
+});

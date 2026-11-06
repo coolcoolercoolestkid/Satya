@@ -1,12 +1,12 @@
 import { analyzePage, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
-import { checkIdentity, defaultIdentityDeps } from "@satya/identity";
+import { checkIdentity, defaultIdentityDeps, ensNamesOnPage } from "@satya/identity";
 
 declare const __ARKIV_ACCESS_KEY__: string;
 const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { checkRegistry } from "@satya/registry";
-import { BUNDLED_TO_REGISTRY, cachedBucket, detectorFor, getSettings, reviewerFor, loadContext, saveSettings, type Settings } from "./data";
+import { BUNDLED_TO_REGISTRY, cachedBucket, detectorFor, getSettings, loadContext, saveSettings, type Settings } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
 const ICON: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "i", good: "✓" };
@@ -15,7 +15,6 @@ const CHECK_NAMES: Record<Finding["check"], string> = {
   page: "What is it asking for?",
   records: "Past records",
   scam: "What is it saying?",
-  review: "AI review",
   ai: "Possibly AI",
   identity: "Who is this?",
 };
@@ -36,7 +35,7 @@ async function sendToTab<T>(tabId: number, msg: ContentRequest): Promise<T | und
 type State =
   | { status: "loading" }
   | { status: "unsupported"; url?: string }
-  | { status: "done"; host: string; result: CredibilityResult; tabId: number };
+  | { status: "done"; host: string; result: CredibilityResult; tabId: number; deep: boolean; ensNames: number };
 
 function ScoreRing({ score, level }: { score: number; level: CredibilityResult["level"] }) {
   const r = 34;
@@ -69,19 +68,16 @@ function FindingRow({ f, tabId }: { f: Finding; tabId: number }) {
 }
 
 function SettingsPanel({ onSaved }: { onSaved: () => void }) {
-  const [s, setS] = useState<Settings>({ detector: "none", apiKey: "", claudeKey: "" });
+  const [s, setS] = useState<Settings>({ detector: "none", apiKey: "" });
   useEffect(() => void getSettings().then(setS), []);
   return (
     <details className="settings">
-      <summary>AI settings</summary>
+      <summary>AI-written text detector (off)</summary>
       <p className="muted">
-        Optional, off by default. When on, page text is sent to the service you pick, using your own API key.
+        <strong>Off by default.</strong> If you turn it on, the deeper check sends up to 5,000 characters of
+        the page's text to the outside service you pick (Pangram or GPTZero), using your own API key.
+        Its answer is a guess, never proof.
       </p>
-      <label>
-        AI page review (Claude API key)
-        <input type="password" value={s.claudeKey} onChange={(e) => setS({ ...s, claudeKey: e.target.value })} placeholder="sk-ant-… stored only in this browser" />
-      </label>
-      <p className="muted">Claude reads the page for scam signs the rules miss. Every sign must quote the page, and it can only warn, never vouch.</p>
       <label>
         AI-written text detector
         <select value={s.detector} onChange={(e) => setS({ ...s, detector: e.target.value as Settings["detector"] })}>
@@ -99,10 +95,29 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+function DeeperCheck({ deep, ensNames, onRun }: { deep: boolean; ensNames: number; onRun: () => void }) {
+  if (deep) {
+    return <p className="muted privacy">Deeper check done. Domain age, certificates{ensNames ? ", ENS names and proofs" : ""} were looked up for this page only.</p>;
+  }
+  return (
+    <section className="privacy">
+      <p className="muted">
+        <strong>Private by default.</strong> So far Satya sent nothing about this page except one bucket id to Arkiv.
+      </p>
+      <button className="primary" onClick={onRun}>Run deeper check</button>
+      <p className="muted">
+        This sends the site's domain to <strong>rdap.org</strong> (when it was registered) and <strong>Cert Spotter</strong> (its
+        HTTPS certificates){ensNames ? <>, the {ensNames} ENS name{ensNames > 1 ? "s" : ""} on this page to an Ethereum node (publicnode.com) and their wallet addresses to Arkiv to load proofs</> : null}.
+        Those services can see your IP address.
+      </p>
+    </section>
+  );
+}
+
 function App() {
   const [state, setState] = useState<State>({ status: "loading" });
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (deep = false) => {
     setState({ status: "loading" });
     const tab = await activeTab();
     if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) {
@@ -114,6 +129,9 @@ function App() {
       setState({ status: "unsupported", url: tab.url });
       return;
     }
+    // Default check: the only network request is one Arkiv bucket id (often answered from cache).
+    // The deeper check, only on request, also looks up domain age, certificates, ENS names and
+    // proofs, and the AI detector if the user turned it on.
     const [ctx, settings, registry] = await Promise.all([loadContext(), getSettings(), checkRegistry(page, cachedBucket)]);
     // Lists the Arkiv registry answered for are not checked again from the bundled copy.
     const covered = new Set([...registry.covered.domain, ...registry.covered.address]);
@@ -142,11 +160,11 @@ function App() {
           weight: 0,
         };
     const [base, identity] = await Promise.all([
-      analyzePage(page, { ...localCtx, aiDetector: detectorFor(settings), reviewer: reviewerFor(settings) }),
-      checkIdentity(page, identityDeps).catch(() => [] as Finding[]),
+      analyzePage(page, { ...localCtx, network: deep, aiDetector: deep ? detectorFor(settings) : undefined }),
+      deep ? checkIdentity(page, identityDeps).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
     ]);
     const result = scoreFindings([...base.findings, ...registry.findings, registryNote, ...identity]);
-    setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id });
+    setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id, deep, ensNames: ensNamesOnPage(page).length });
     await sendToTab(tab.id, {
       type: "highlight",
       items: result.findings
@@ -162,10 +180,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void run();
-    const onActivated = () => void run();
+    void run(false);
+    const onActivated = () => void run(false);
     const onUpdated = (_id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-      if (info.status === "complete" && tab.active) void run();
+      if (info.status === "complete" && tab.active) void run(false);
     };
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.onUpdated.addListener(onUpdated);
@@ -179,7 +197,7 @@ function App() {
     <main>
       <header>
         <h1>Satya <span className="muted">सत्य</span></h1>
-        <button className="ghost" onClick={() => void run()} aria-label="Re-check this page">↻</button>
+        <button className="ghost" onClick={() => void run(false)} aria-label="Re-check this page">↻</button>
       </header>
 
       {state.status === "loading" && <p className="muted">Checking this page…</p>}
@@ -210,7 +228,8 @@ function App() {
           )}
         </>
       )}
-      <SettingsPanel onSaved={() => void run()} />
+      {state.status === "done" && <DeeperCheck deep={state.deep} ensNames={state.ensNames} onRun={() => void run(true)} />}
+      <SettingsPanel onSaved={() => void run(false)} />
       <footer className="muted">Every point lost comes from a finding above, with its source.</footer>
     </main>
   );

@@ -17,7 +17,6 @@ import {
   checkNamedEntities,
   checkPhishing,
   checkScamText,
-  claudeReviewer,
   scoreFindings,
   snapshotFromHtml,
   type CredibilityResult,
@@ -28,8 +27,6 @@ import { loadContext } from "./context.js";
 const USER_AGENT = "SatyaBot/0.1 (+https://github.com/coolcoolercoolestkid/Satya)";
 const MAX_HTML_BYTES = 2_000_000;
 const FETCH_TIMEOUT_MS = 10_000;
-
-const reviewer = process.env.ANTHROPIC_API_KEY ? claudeReviewer(process.env.ANTHROPIC_API_KEY) : undefined;
 
 /** Refuses local and private addresses, so a tricked agent can't make us read internal pages. */
 function assertPublicUrl(raw: string): URL {
@@ -121,7 +118,7 @@ server.registerTool(
     }
     const ctx = await loadContext();
     const { snapshot, note } = await fetchPage(target);
-    const r = await analyzePage(snapshot, { ...ctx, reviewer });
+    const r = await analyzePage(snapshot, ctx);
     return output(snapshot.url, r, note ? [note] : []);
   },
 );
@@ -194,4 +191,4 @@ server.registerTool(
 );
 
 await server.connect(new StdioServerTransport());
-console.error(`[satya] MCP server ready${reviewer ? " (AI page review on)" : ""}.`);
+console.error("[satya] MCP server ready.");

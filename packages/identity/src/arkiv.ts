@@ -3,7 +3,7 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { eq } from "@arkiv-network/sdk/query";
 import { addr, bytes, defineSchema, str } from "@arkiv-network/sdk/schema";
 import { custom, hexToString, http, stringToBytes, type Address, type EIP1193Provider, type Hex } from "viem";
-import { ANON_AADHAAR_ISSUER } from "./anonAadhaar.js";
+import { ANON_AADHAAR_ISSUER, anonAadhaarNullifier, verifyAnonAadhaar } from "./anonAadhaar.js";
 import { parseAttestation, serializeAttestation, type SignedAttestation } from "./credential.js";
 
 /**
@@ -17,6 +17,12 @@ export const SatyaProofs = defineSchema("satya_proofs_v1", {
   issuer: addr().indexed(),
   kind: str().indexed(),
   payload: bytes(),
+  /**
+   * Anon Aadhaar only: the proof's nullifier, the same for one Aadhaar card every time it
+   * proves for Satya, and unrelated to the Aadhaar number. Lets anyone see if one card has
+   * verified more than one wallet.
+   */
+  nullifier: str().indexed().optional(),
 });
 
 /**
@@ -73,6 +79,7 @@ export async function publishAttestation(writer: Writer, signed: SignedAttestati
 
 /** Stores an Anon Aadhaar proof. The proof has no expiry of its own, so it lives for Arkiv's maximum. */
 export async function publishAnonAadhaar(writer: Writer, holder: Address, serializedProof: string) {
+  const nullifier = await anonAadhaarNullifier(serializedProof);
   return writer.createEntity(
     SatyaProofs,
     {
@@ -81,6 +88,7 @@ export async function publishAnonAadhaar(writer: Writer, holder: Address, serial
       issuer: addr(ANON_AADHAAR_ISSUER),
       kind: "anon-aadhaar",
       payload: stringToBytes(serializedProof),
+      nullifier,
     },
     { expiration: ExpirationTime.max() },
   );
@@ -130,4 +138,47 @@ export async function fetchProofRecords(holder: Address, accessKey = ""): Promis
     }
     return record;
   });
+}
+
+export interface NullifierUse {
+  holder: Address;
+  /** Arkiv record creation time (block-based), used to tell which wallet used the card first. */
+  createdAt: number;
+}
+
+/**
+ * Every wallet that published a valid Anon Aadhaar proof with this nullifier, oldest first.
+ * Each record must be owned by its holder and its proof must verify, so nobody can block a
+ * card by publishing a fake record with its nullifier.
+ */
+export async function walletsForNullifier(nullifier: string, accessKey = ""): Promise<NullifierUse[]> {
+  const page = await arkivReader(accessKey)
+    .select({ $owner: true, $createdAt: true, holder: true, payload: true })
+    .from(SatyaProofs)
+    .where(eq("nullifier", nullifier))
+    .limit(20)
+    .fetch();
+  const uses: NullifierUse[] = [];
+  for (const row of page.entities) {
+    const holder = String(row.holder.value).toLowerCase() as Address;
+    if (String(row.$owner).toLowerCase() !== holder) continue;
+    let proof: string;
+    try {
+      proof = hexToString(row.payload.value as Hex);
+    } catch {
+      continue;
+    }
+    const v = await verifyAnonAadhaar(proof, holder);
+    if (!v.ok || v.nullifier !== nullifier) continue;
+    if (uses.some((u) => u.holder === holder)) continue;
+    uses.push({ holder, createdAt: Number(row.$createdAt) });
+  }
+  return uses.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** If this card already verified a different wallet first, that wallet; otherwise undefined. */
+export async function earlierWalletForCard(nullifier: string, holder: Address, accessKey = ""): Promise<Address | undefined> {
+  const uses = await walletsForNullifier(nullifier, accessKey);
+  const first = uses[0];
+  return first && first.holder !== holder.toLowerCase() ? first.holder : undefined;
 }

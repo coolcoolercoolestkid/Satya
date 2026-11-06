@@ -1,5 +1,5 @@
 /** Which of Satya's checks produced a finding. */
-export type CheckId = "phishing" | "page" | "scam" | "records" | "review" | "ai" | "identity";
+export type CheckId = "phishing" | "page" | "scam" | "records" | "ai" | "identity";
 
 /** danger = likely harmful, warning = be careful, info = worth knowing, good = positive signal. */
 export type Severity = "danger" | "warning" | "info" | "good";

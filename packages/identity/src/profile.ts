@@ -3,7 +3,7 @@ import { createPublicClient, http, type Address } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { normalize } from "viem/ens";
 import { verifyAnonAadhaar } from "./anonAadhaar.js";
-import { fetchProofRecords, type ProofRecord } from "./arkiv.js";
+import { earlierWalletForCard, fetchProofRecords, type ProofRecord } from "./arkiv.js";
 import { CLAIM_LABELS, verifyAttestation } from "./credential.js";
 
 export interface EnsResolver {
@@ -71,11 +71,17 @@ const sameHandle = (a: string, b: string) => a.replace(/^@/, "").toLowerCase() =
 export interface IdentityDeps {
   ens: EnsResolver;
   proofs: (holder: Address) => Promise<ProofRecord[]>;
+  /** The wallet this Aadhaar card verified first, if it wasn't `holder`. */
+  cardFirstWallet?: (nullifier: string, holder: Address) => Promise<Address | undefined>;
   now?: Date;
 }
 
 export function defaultIdentityDeps(arkivAccessKey = ""): IdentityDeps {
-  return { ens: viemEnsResolver(), proofs: (a) => fetchProofRecords(a, arkivAccessKey) };
+  return {
+    ens: viemEnsResolver(),
+    proofs: (a) => fetchProofRecords(a, arkivAccessKey),
+    cardFirstWallet: (n, h) => earlierWalletForCard(n, h, arkivAccessKey),
+  };
 }
 
 /** "Who is this?" findings for the ENS names on a page, with their verified proofs. */
@@ -145,15 +151,27 @@ export async function checkIdentity(page: PageSnapshot, deps: IdentityDeps): Pro
     for (const r of records) {
       if (r.anonAadhaar) {
         const v = await verifyAnonAadhaar(r.anonAadhaar, address);
+        const earlier = v.ok && deps.cardFirstWallet ? await deps.cardFirstWallet(v.nullifier, address).catch(() => undefined) : undefined;
+        if (v.ok && earlier) {
+          findings.push({
+            check: "identity",
+            severity: "warning",
+            title: `${name}: this Aadhaar card already verified another wallet`,
+            detail: `The same card proved for ${earlier.slice(0, 6)}…${earlier.slice(-4)} first. Satya counts one wallet per card, so this proof doesn't count.`,
+            source: "Anon Aadhaar nullifier, records on Arkiv",
+            weight: 10,
+          });
+          continue;
+        }
         if (v.ok && v.ageAbove18) {
           verified++;
           findings.push({
             check: "identity",
             severity: "good",
             title: `${name}: 18+ Aadhaar holder${v.state ? ` · ${v.state}` : ""}`,
-            detail: v.test
+            detail: `${v.test
               ? "Zero-knowledge proof made from Anon Aadhaar TEST data, not a real Aadhaar card."
-              : "Zero-knowledge proof from a UIDAI-signed Aadhaar QR. No Aadhaar number, name or birthday revealed.",
+              : "Zero-knowledge proof from a UIDAI-signed Aadhaar QR. No Aadhaar number, name or birthday revealed."} QR signed ${v.signedAt.toISOString().slice(0, 10)}.`,
             source: "Anon Aadhaar ZK proof, record on Arkiv",
             weight: 0,
           });

@@ -1,5 +1,4 @@
 import {
-  claudeReviewer,
   gptZeroDetector,
   pangramDetector,
   SEED_BRANDS,
@@ -7,7 +6,6 @@ import {
   type AiDetector,
   type AnalyzeContext,
   type DomainList,
-  type PageReviewer,
 } from "@satya/checks";
 import { fetchBucket, SATYA_PUBLISHER, type BucketFetcher, type BucketRecord } from "@satya/registry";
 
@@ -71,16 +69,13 @@ export type DetectorChoice = "none" | "pangram" | "gptzero";
 export interface Settings {
   detector: DetectorChoice;
   apiKey: string;
-  /** Anthropic API key for the AI page review. Empty = review off. */
-  claudeKey: string;
 }
 
 export async function getSettings(): Promise<Settings> {
-  const s = await chrome.storage.local.get(["detector", "apiKey", "claudeKey"]);
+  const s = await chrome.storage.local.get(["detector", "apiKey"]);
   return {
     detector: (s.detector as DetectorChoice) ?? "none",
     apiKey: (s.apiKey as string) ?? "",
-    claudeKey: (s.claudeKey as string) ?? "",
   };
 }
 
@@ -93,10 +88,6 @@ export function detectorFor(s: Settings): AiDetector | undefined {
   if (s.detector === "pangram") return pangramDetector(s.apiKey);
   if (s.detector === "gptzero") return gptZeroDetector(s.apiKey);
   return undefined;
-}
-
-export function reviewerFor(s: Settings): PageReviewer | undefined {
-  return s.claudeKey ? claudeReviewer(s.claudeKey, { browser: true }) : undefined;
 }
 
 // ---------- Satya's scam registry on Arkiv ----------
