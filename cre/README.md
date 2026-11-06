@@ -10,7 +10,7 @@ independent opinion on whether a website is what it claims to be.
 | Fact | Source |
 |---|---|
 | When the domain was registered | RDAP, straight from the domain's own registry (e.g. Verisign for `.com`) |
-| When it got its first HTTPS certificate | Certificate Transparency logs, via [Cert Spotter](https://sslmate.com/certspotter/) |
+| Date of its oldest still-valid HTTPS certificate | Certificate Transparency logs, via [Cert Spotter](https://sslmate.com/certspotter/) (the free API lists only unexpired certificates) |
 | When the Internet Archive first saw it | [Wayback Machine availability API](https://archive.org/help/wayback_api.php) |
 | Whether it resolves in DNS | Cloudflare DNS-over-HTTPS |
 
@@ -23,9 +23,9 @@ lowers it; years of history raise it; one weak signal alone can't reach "trustwo
 ```json
 {
   "domain": "uniswap.org",
-  "facts": { "registered": "…", "firstCertificate": "…", "firstArchived": "2011-…", "resolves": true },
+  "facts": { "registered": "2018-11-26", "oldestValidCertificate": "2026-08-14", "firstArchived": "2011-09-26", "resolves": true },
   "score": 80,
-  "signals": [{ "points": 20, "reason": "Domain is 5+ years old" }, …],
+  "signals": [{ "points": 20, "reason": "Domain is 5+ years old" }, { "points": 10, "reason": "Internet Archive has seen it for 10+ years" }],
   "agreedBy": "Chainlink DON consensus (median of every node's independent lookup)"
 }
 ```
@@ -52,7 +52,15 @@ cd .. && cre workflow simulate site-facts --target staging-settings --non-intera
 
 ## Status
 
-Type-checks against `@chainlink/cre-sdk` 1.23.0; the scoring is tested in Node. **Not yet run
-in the CRE simulator.** Not deployed: deploying needs Chainlink to grant deploy access, and a
+**Runs in the CRE simulator** (CRE CLI v1.39.0, `@chainlink/cre-sdk` 1.23.0), with live lookups,
+on 7 Nov 2026:
+
+| Domain | Registered | Oldest valid cert | First archived | Resolves | Score | Reasons |
+|---|---|---|---|---|---|---|
+| uniswap.org | 2018-11-26 | 2026-08-14 | 2011-09-26 | yes | **80** | +20 domain 5+ years old; +10 archived 10+ years |
+| 473621.com (on Phishing.Database's active list) | 2026-10-26 | 2026-10-26 | never | yes | **25** | −25 registered only 11 days ago |
+| check-entropy-verification.com (on Phishing.Database's active list) | 2026-08-22 | 2026-08-22 | never | no | **40** | −10 registered 76 days ago; no longer resolves |
+
+Full output: [simulation.md](simulation.md). Not deployed: deploying needs Chainlink to grant deploy access, and a
 deployed HTTP trigger must list the EVM addresses allowed to call it (`authorizedKeys`);
 simulation accepts an empty list.

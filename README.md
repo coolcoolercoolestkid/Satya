@@ -37,7 +37,7 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | **Scam evidence**: Save a page (text, screenshot, findings) to a file; anchor only its SHA-256 fingerprint on Arkiv; anyone can later check the file is unchanged and when it was anchored | ✅ file check tested in a browser; extension capture not yet tried in Chrome |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
 | MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
-| **Chainlink CRE workflow** ([cre/](cre/README.md)): every DON node independently looks up a domain's registration date, first certificate, archive history and DNS; the DON agrees on each (median) and scores them | 🟡 written and type-checked against the CRE SDK, scoring tested; not yet run in the CRE simulator |
+| **Chainlink CRE workflow** ([cre/](cre/README.md)): every DON node independently looks up a domain's registration date, first certificate, archive history and DNS; the DON agrees on each (median) and scores them | ✅ runs in the CRE simulator with live lookups: uniswap.org 80, two live phishing domains 25 and 40 ([results](cre/README.md#status)); not deployed (needs Chainlink deploy access) |
 | zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |
 
 ## How the score works

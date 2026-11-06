@@ -3,6 +3,7 @@
 /** Facts each node returns. 0 means "unknown" (lookup failed or no record). Times are Unix seconds. */
 export type Facts = {
   registeredAt: number;
+  /** Oldest still-valid certificate (Cert Spotter's free API lists only unexpired ones). */
   firstCertAt: number;
   firstArchivedAt: number;
   resolves: number;
@@ -25,9 +26,13 @@ export function score(f: Facts, now: number): { score: number; signals: Signal[]
     else if (years >= 2) signals.push({ points: 15, reason: "Domain is 2+ years old" });
     else if (years >= 1) signals.push({ points: 8, reason: "Domain is 1+ year old" });
   }
-  if (f.firstCertAt) {
+  // Cert Spotter's free API lists only certificates still valid, so this is the oldest *current*
+  // certificate. Sites with short-lived certificates renew every few days, so a new certificate
+  // only counts against a domain that is itself new or of unknown age.
+  const domainDays = f.registeredAt ? (now - f.registeredAt) / SECONDS_PER_DAY : 0;
+  if (f.firstCertAt && (!f.registeredAt || domainDays < 180)) {
     const days = (now - f.firstCertAt) / SECONDS_PER_DAY;
-    if (days < 7) signals.push({ points: -15, reason: `First HTTPS certificate only ${Math.floor(days)} days old` });
+    if (days < 7) signals.push({ points: -15, reason: `Its oldest valid HTTPS certificate is only ${Math.floor(days)} days old` });
   }
   if (f.firstArchivedAt) {
     const years = (now - f.firstArchivedAt) / SECONDS_PER_DAY / 365;

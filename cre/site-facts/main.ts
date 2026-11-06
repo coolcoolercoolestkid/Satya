@@ -5,7 +5,7 @@
  *
  * Every node in the Chainlink DON independently looks up four public facts about the domain:
  *   1. when it was registered (RDAP, straight from the domain's own registry),
- *   2. when it got its first HTTPS certificate (Certificate Transparency logs, via Cert Spotter),
+ *   2. the date of its oldest still-valid HTTPS certificate (Certificate Transparency logs, via Cert Spotter),
  *   3. when the Internet Archive first saw it,
  *   4. whether it resolves in DNS (Cloudflare DNS-over-HTTPS).
  * The DON then agrees on each fact (median across nodes), so no single API, server or node,
@@ -133,7 +133,7 @@ const onRequest = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
     checkedAt: new Date(now * 1000).toISOString(),
     facts: {
       registered: iso(facts.registeredAt),
-      firstCertificate: iso(facts.firstCertAt),
+      oldestValidCertificate: iso(facts.firstCertAt),
       firstArchived: iso(facts.firstArchivedAt),
       resolves: facts.resolves === 1,
     },
