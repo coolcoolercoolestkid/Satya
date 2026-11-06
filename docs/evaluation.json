@@ -1,69 +1,70 @@
 {
   "summary": {
-    "date": "2026-11-06T17:27:48.625Z",
+    "date": "2026-11-06T18:01:24.572Z",
     "legit": {
       "n": 36,
-      "loaded": 30,
-      "mean": 85,
+      "loaded": 28,
+      "mean": 86,
       "median": 85,
-      "below45": 1,
-      "atLeast75": 34
+      "below45": 0,
+      "atLeast75": 28
     },
     "phishing": {
       "n": 35,
       "loaded": 20,
-      "mean": 59,
+      "mean": 51,
       "median": 50,
       "below45": 1,
-      "atLeast75": 7
+      "atLeast75": 0
     }
   },
   "legit": [
     {
       "domain": "google.com",
       "loaded": true,
-      "score": 75,
+      "score": 85,
       "level": "trustworthy",
       "reasons": [
-        "+25 Domain is 29+ years old"
+        "+25 Domain is 29+ years old",
+        "+10 Online since 1998 (28+ years of history)"
       ]
     },
     {
       "domain": "wikipedia.org",
       "loaded": true,
-      "score": 75,
+      "score": 85,
       "level": "trustworthy",
       "reasons": [
-        "+25 Domain is 25+ years old"
+        "+25 Domain is 25+ years old",
+        "+10 Online since 2001 (25+ years of history)"
       ]
     },
     {
       "domain": "amazon.in",
-      "loaded": true,
-      "score": 75,
-      "level": "trustworthy",
-      "reasons": [
-        "+25 Domain is 21+ years old"
-      ]
+      "loaded": false,
+      "score": 50,
+      "level": "unverified",
+      "reasons": []
     },
     {
       "domain": "flipkart.com",
       "loaded": false,
-      "score": 85,
+      "score": 95,
       "level": "trustworthy",
       "reasons": [
         "+25 Domain is 19+ years old",
+        "+10 Online since 2007 (19+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "onlinesbi.sbi",
-      "loaded": true,
+      "loaded": false,
       "score": 100,
       "level": "trustworthy",
       "reasons": [
-        "+45 Registered Indian bank domain (.bank.in)",
-        "+25 Domain is 21+ years old",
+        "+45 Official State Bank of India domain",
+        "+20 Domain is 6+ years old",
         "+15 Certificate verifies the company behind the site (EV)"
       ]
     },
@@ -75,18 +76,18 @@
       "reasons": [
         "-20 Page says \"HDFC Bank\", but this isn't HDFC Bank's site",
         "+45 Registered Indian bank domain (.bank.in)",
-        "+25 Domain is 21+ years old"
+        "+25 Domain is 21+ years old",
+        "+10 Online since 2007 (19+ years of history)"
       ]
     },
     {
       "domain": "icicibank.com",
-      "loaded": true,
+      "loaded": false,
       "score": 100,
       "level": "trustworthy",
       "reasons": [
-        "-20 Page says \"ICICI Bank\", but this isn't ICICI Bank's site",
-        "+45 Registered Indian bank domain (.bank.in)",
-        "+25 Domain is 21+ years old",
+        "+45 Official ICICI Bank domain",
+        "+10 Online since 1997 (29+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
@@ -103,32 +104,31 @@
     {
       "domain": "zomato.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
+      "score": 70,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 20+ years old",
+        "+10 Online since 2010 (15+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "swiggy.com",
-      "loaded": true,
-      "score": 85,
+      "loaded": false,
+      "score": 95,
       "level": "trustworthy",
       "reasons": [
         "+25 Domain is 13+ years old",
+        "+10 Online since 2004 (22+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "irctc.co.in",
       "loaded": false,
-      "score": 100,
-      "level": "trustworthy",
+      "score": 65,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 24+ years old",
-        "+15 Certificate verifies the company behind the site (EV)",
-        "+10 Online since 2002 (24+ years of history)"
+        "+15 Certificate verifies the company behind the site (EV)"
       ]
     },
     {
@@ -140,77 +140,75 @@
         "+45 Official Income Tax Department domain",
         "+45 Official Indian government domain",
         "+25 Domain is 23+ years old",
-        "+10 Online since 2001 (25+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "uidai.gov.in",
-      "loaded": true,
+      "loaded": false,
       "score": 100,
       "level": "trustworthy",
       "reasons": [
         "+45 Official Indian government domain",
         "+25 Domain is 17+ years old",
-        "+10 Online since 2009 (16+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "github.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
+      "score": 74,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 19+ years old",
-        "+10 Online since 2008 (18+ years of history)"
+        "+25 Domain is 19+ years old"
       ]
     },
     {
       "domain": "stackoverflow.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
+      "score": 74,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 22+ years old",
-        "+10 Online since 2004 (22+ years of history)"
+        "+25 Domain is 22+ years old"
       ]
     },
     {
       "domain": "bbc.com",
-      "loaded": false,
-      "score": 50,
-      "level": "unverified",
-      "reasons": []
-    },
-    {
-      "domain": "ndtv.com",
       "loaded": true,
       "score": 85,
       "level": "trustworthy",
       "reasons": [
-        "+25 Domain is 30+ years old",
-        "+10 Online since 1999 (26+ years of history)"
+        "+25 Domain is 37+ years old",
+        "+10 Certificate verifies the company behind the site (OV)"
+      ]
+    },
+    {
+      "domain": "ndtv.com",
+      "loaded": true,
+      "score": 60,
+      "level": "unverified",
+      "reasons": [
+        "-15 Loads invisible frames from other sites",
+        "+25 Domain is 30+ years old"
       ]
     },
     {
       "domain": "thehindu.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
+      "score": 60,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 30+ years old",
-        "+10 Online since 2000 (26+ years of history)"
+        "-15 Loads invisible frames from other sites",
+        "+25 Domain is 30+ years old"
       ]
     },
     {
       "domain": "indianexpress.com",
       "loaded": true,
-      "score": 95,
+      "score": 85,
       "level": "trustworthy",
       "reasons": [
         "+25 Domain is 24+ years old",
-        "+10 Online since 2002 (24+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
@@ -221,19 +219,17 @@
       "level": "trustworthy",
       "reasons": [
         "+45 Official Coinbase domain",
-        "+25 Domain is 15+ years old",
-        "+10 Online since 2001 (25+ years of history)"
+        "+25 Domain is 15+ years old"
       ]
     },
     {
       "domain": "metamask.io",
       "loaded": true,
-      "score": 15,
-      "level": "high-risk",
+      "score": 100,
+      "level": "trustworthy",
       "reasons": [
-        "-55 Looks like MetaMask, but isn't",
-        "+25 Domain is 21+ years old",
-        "+10 Online since 2001 (25+ years of history)"
+        "+45 Official MetaMask domain",
+        "+25 Domain is 21+ years old"
       ]
     },
     {
@@ -243,8 +239,7 @@
       "level": "trustworthy",
       "reasons": [
         "+45 Official Ethereum domain",
-        "+25 Domain is 12+ years old",
-        "+10 Online since 2014 (12+ years of history)"
+        "+25 Domain is 12+ years old"
       ]
     },
     {
@@ -254,8 +249,7 @@
       "level": "trustworthy",
       "reasons": [
         "+45 Official Uniswap domain",
-        "+20 Domain is 7+ years old",
-        "+10 Online since 2011 (15+ years of history)"
+        "+20 Domain is 7+ years old"
       ]
     },
     {
@@ -265,8 +259,7 @@
       "level": "trustworthy",
       "reasons": [
         "+45 Official Zerodha domain",
-        "+25 Domain is 16+ years old",
-        "+10 Online since 2010 (16+ years of history)"
+        "+25 Domain is 16+ years old"
       ]
     },
     {
@@ -282,7 +275,7 @@
     },
     {
       "domain": "makemytrip.com",
-      "loaded": false,
+      "loaded": true,
       "score": 85,
       "level": "trustworthy",
       "reasons": [
@@ -293,57 +286,63 @@
     {
       "domain": "nykaa.com",
       "loaded": true,
-      "score": 75,
-      "level": "trustworthy",
+      "score": 74,
+      "level": "unverified",
       "reasons": [
         "+25 Domain is 14+ years old"
       ]
     },
     {
       "domain": "myntra.com",
-      "loaded": false,
-      "score": 85,
+      "loaded": true,
+      "score": 80,
       "level": "trustworthy",
       "reasons": [
+        "-15 Loads invisible frames from other sites",
         "+25 Domain is 19+ years old",
+        "+10 Online since 2007 (19+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "bookmyshow.com",
       "loaded": true,
-      "score": 75,
+      "score": 85,
       "level": "trustworthy",
       "reasons": [
-        "+25 Domain is 19+ years old"
+        "+25 Domain is 19+ years old",
+        "+10 Online since 2007 (19+ years of history)"
       ]
     },
     {
       "domain": "naukri.com",
       "loaded": true,
-      "score": 85,
+      "score": 95,
       "level": "trustworthy",
       "reasons": [
         "+25 Domain is 29+ years old",
+        "+10 Online since 1997 (29+ years of history)",
         "+10 Certificate verifies the company behind the site (OV)"
       ]
     },
     {
       "domain": "ola.com",
       "loaded": true,
-      "score": 75,
+      "score": 85,
       "level": "trustworthy",
       "reasons": [
-        "+25 Domain is 31+ years old"
+        "+25 Domain is 31+ years old",
+        "+10 Online since 1997 (29+ years of history)"
       ]
     },
     {
       "domain": "airtel.in",
       "loaded": true,
-      "score": 75,
+      "score": 85,
       "level": "trustworthy",
       "reasons": [
-        "+25 Domain is 21+ years old"
+        "+25 Domain is 21+ years old",
+        "+10 Online since 2005 (21+ years of history)"
       ]
     },
     {
@@ -403,21 +402,16 @@
     {
       "domain": "239a2c36-b165-41f6-8976-778baccf9997-00-2h63tlj6ef4ru.picard.replit.dev",
       "loaded": true,
-      "score": 70,
+      "score": 50,
       "level": "unverified",
-      "reasons": [
-        "+20 Domain is 5+ years old"
-      ]
+      "reasons": []
     },
     {
       "domain": "56dc1e76297c966053315b3476ff3a7d-dot-gle9392420309493993.rj.r.appspot.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
-      "reasons": [
-        "+25 Domain is 21+ years old",
-        "+10 Online since 2001 (24+ years of history)"
-      ]
+      "score": 50,
+      "level": "unverified",
+      "reasons": []
     },
     {
       "domain": "a0435350.xsph.ru",
@@ -459,20 +453,17 @@
     {
       "domain": "attnet-102935.weeblysite.com",
       "loaded": true,
-      "score": 75,
-      "level": "trustworthy",
-      "reasons": [
-        "+25 Domain is 13+ years old"
-      ]
+      "score": 50,
+      "level": "unverified",
+      "reasons": []
     },
     {
       "domain": "babymonitorbestbuys.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
+      "score": 74,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 14+ years old",
-        "+10 Online since 2012 (13+ years of history)"
+        "+25 Domain is 14+ years old"
       ]
     },
     {
@@ -515,11 +506,10 @@
     {
       "domain": "dpcpl.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
+      "score": 74,
+      "level": "unverified",
       "reasons": [
-        "+25 Domain is 16+ years old",
-        "+10 Online since 2016 (10+ years of history)"
+        "+25 Domain is 16+ years old"
       ]
     },
     {
@@ -543,22 +533,16 @@
     {
       "domain": "fyjhxabdhxnxhmqd-dot-millinium.ey.r.appspot.com",
       "loaded": true,
-      "score": 85,
-      "level": "trustworthy",
-      "reasons": [
-        "+25 Domain is 21+ years old",
-        "+10 Online since 2001 (24+ years of history)"
-      ]
+      "score": 50,
+      "level": "unverified",
+      "reasons": []
     },
     {
       "domain": "grubbokep-whatsapp2022.duckdns.org",
       "loaded": false,
-      "score": 85,
-      "level": "trustworthy",
-      "reasons": [
-        "+25 Domain is 13+ years old",
-        "+10 Online since 2013 (13+ years of history)"
-      ]
+      "score": 50,
+      "level": "unverified",
+      "reasons": []
     },
     {
       "domain": "hfjdhddh893.weebly.com",
@@ -600,20 +584,16 @@
     {
       "domain": "mailsecure-helpdesk.azurefd.net",
       "loaded": true,
-      "score": 70,
+      "score": 50,
       "level": "unverified",
-      "reasons": [
-        "+20 Domain is 8+ years old"
-      ]
+      "reasons": []
     },
     {
       "domain": "metamiesk-login.gitbook.io",
       "loaded": true,
-      "score": 60,
+      "score": 50,
       "level": "unverified",
-      "reasons": [
-        "+10 Online since 2014 (12+ years of history)"
-      ]
+      "reasons": []
     },
     {
       "domain": "ms-useradmnsvrprotection.tk",
@@ -639,21 +619,16 @@
     {
       "domain": "photgrap.duckdns.org",
       "loaded": false,
-      "score": 85,
-      "level": "trustworthy",
-      "reasons": [
-        "+25 Domain is 13+ years old",
-        "+10 Online since 2013 (13+ years of history)"
-      ]
+      "score": 50,
+      "level": "unverified",
+      "reasons": []
     },
     {
       "domain": "pub-38de18dfb4c143c89d3652d907a7e00f.r2.dev",
       "loaded": true,
-      "score": 65,
+      "score": 50,
       "level": "unverified",
-      "reasons": [
-        "+15 Domain is 4+ years old"
-      ]
+      "reasons": []
     },
     {
       "domain": "rashformalevent.robinsonwalker1.repl.co",
@@ -665,11 +640,9 @@
     {
       "domain": "rubinhoodiuit.gitbook.io",
       "loaded": false,
-      "score": 60,
+      "score": 50,
       "level": "unverified",
-      "reasons": [
-        "+10 Online since 2014 (12+ years of history)"
-      ]
+      "reasons": []
     },
     {
       "domain": "talktalkserver334.weebly.com",
