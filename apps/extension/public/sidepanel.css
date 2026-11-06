@@ -42,6 +42,7 @@ button { font: inherit; cursor: pointer; }
 .summary { display: flex; gap: 14px; align-items: center; margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); }
 .verdict { font-size: 18px; font-weight: 650; }
 .summary.trustworthy .verdict { color: var(--good); }
+.summary.unverified .verdict { color: var(--fg); }
 .summary.careful .verdict { color: var(--warning); }
 .summary.high-risk .verdict { color: var(--danger); }
 .host { color: var(--muted); word-break: break-all; }
@@ -49,6 +50,7 @@ button { font: inherit; cursor: pointer; }
 .ring-bg { fill: none; stroke: var(--border); stroke-width: 8; }
 .ring-fg { fill: none; stroke-width: 8; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 44px 44px; transition: stroke-dashoffset 0.5s; }
 .ring.trustworthy .ring-fg { stroke: var(--good); }
+.ring.unverified .ring-fg { stroke: var(--muted, #888); }
 .ring.careful .ring-fg { stroke: var(--warning); }
 .ring.high-risk .ring-fg { stroke: var(--danger); }
 .ring-text { font-size: 22px; font-weight: 700; fill: var(--fg); }
@@ -80,3 +82,4 @@ footer { margin-top: 16px; font-size: 12px; }
 .privacy { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .privacy .primary { margin: 6px 0; }
 .privacy p { margin: 4px 0; font-size: 12.5px; }
+.small-note { font-size: 12px; margin-top: 4px; max-width: 220px; }

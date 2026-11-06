@@ -30,13 +30,30 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | Checks: lookalike domains, scam wording incl. India-specific scams, risky forms and fields, gov/bank domain rules, fake app downloads | ✅ (run locally) |
 | **Arkiv public scam registry**: MetaMask phishing list + OFAC sanctioned wallets, hashed into 256 buckets, private lookup | ✅ live on Rabdi testnet, verified 256/256 buckets per list |
 | Deeper check on request: domain age (RDAP), HTTPS certificate type (Cert Spotter), ENS identity and proofs | ✅ |
-| AI-written text: page-wide "X% looks AI-written" with every AI paragraph highlighted (Pangram or GPTZero, your own key) | ✅ off by default; tested with a stand-in detector, not a live key |
-| AI images: reads Content Credentials (C2PA) labels, e.g. "made by AI", "camera photo", "label broken", with the official C2PA SDK running inside the extension | ✅ in the deeper check; tested in a browser on official C2PA test images |
+| AI content, shown separately and never part of the trust score. Images: reads Content Credentials (C2PA) labels, e.g. "made by AI", "camera photo", "label broken", with the official C2PA SDK running inside the extension | ✅ in the deeper check; tested in a browser on official C2PA test images |
 | Identity: demo DigiLocker issuer (EIP-712 signed claims), proofs on Arkiv owned by the holder | ✅ |
 | Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ✅ real TEST-data proof made, published to Arkiv and read back verified ([record](https://rabdi.explorer.arkiv.network/entity/0x2bc7745c1a37db51b75f81b50a084a828719aaab9a00eed8a4459d8a0d2c2afd)); proving inside the browser not yet timed |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
 | MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
 | zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |
+
+## How the score works
+
+1. Start at **100**. Every warning or danger the checks find takes off its points, and each
+   one is shown with its reason and source.
+2. **Any danger caps the score at 60.** An official brand, `.gov.in` or `.bank.in` domain lifts
+   it to at least 85.
+3. **75 or more** shows **"Looks trustworthy"** only when something positive vouches for the
+   site: an official brand domain, a `.gov.in`/`.bank.in` domain, a company-verified (OV/EV)
+   certificate, or a domain registered years ago. Without that it shows **"No red flags
+   found"**: Satya saw nothing wrong, but nothing proves the site either. Run the deeper check
+   to look up its age and certificate.
+4. 45–74 is **"Be careful"**, below 45 **"High risk"**.
+5. **AI content** (AI images by Content Credentials) is shown in its own box and never changes
+   the score: AI-made content isn't a scam by itself.
+
+A site with no warnings isn't proven safe. Satya's lists and rules catch known phishing,
+sanctioned wallets, lookalikes and common scam patterns, not every bad site on the web.
 
 ## Satya on Arkiv
 
@@ -112,8 +129,8 @@ forms, gov/bank domain rules) run locally against rules and lists shipped with t
 - the page's larger images (up to 8) are fetched again from the sites that served them, mostly
   from the browser cache and without cookies, to read their Content Credentials on your
   computer;
-- the page's main text to Pangram or GPTZero, **only** if you turned on the AI-written-text
-  detector in settings (off by default) and gave it your own API key.
+- nothing is ever sent to an AI-detection service. AI-written text isn't scored, because no
+  detector that runs without an outside account is accurate enough to show a percentage.
 
 **No analytics, no trackers, no accounts.** The extension and web app load no third-party
 scripts or fonts.

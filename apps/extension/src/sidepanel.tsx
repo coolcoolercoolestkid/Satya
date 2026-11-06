@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import { checkRegistry } from "@satya/registry";
 import { checkImageCredentials } from "./c2pa";
 import { credentialFindings } from "@satya/checks";
-import { BUNDLED_TO_REGISTRY, cachedBucket, detectorFor, getSettings, loadContext, saveSettings, type Settings } from "./data";
+import { BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
 const ICON: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "i", good: "✓" };
@@ -17,7 +17,7 @@ const CHECK_NAMES: Record<Finding["check"], string> = {
   page: "What is it asking for?",
   records: "Past records",
   scam: "What is it saying?",
-  ai: "Possibly AI",
+  ai: "AI content (not part of the score)",
   identity: "Who is this?",
 };
 
@@ -69,37 +69,15 @@ function FindingRow({ f, tabId }: { f: Finding; tabId: number }) {
   );
 }
 
-function SettingsPanel({ onSaved }: { onSaved: () => void }) {
-  const [s, setS] = useState<Settings>({ detector: "none", apiKey: "" });
-  useEffect(() => void getSettings().then(setS), []);
-  return (
-    <details className="settings">
-      <summary>AI-written text detector (off)</summary>
-      <p className="muted">
-        <strong>Off by default.</strong> If you turn it on, the deeper check sends up to 5,000 characters of
-        the page's text to the outside service you pick (Pangram or GPTZero), using your own API key.
-        Its answer is a guess, never proof.
-      </p>
-      <label>
-        AI-written text detector
-        <select value={s.detector} onChange={(e) => setS({ ...s, detector: e.target.value as Settings["detector"] })}>
-          <option value="none">Off</option>
-          <option value="pangram">Pangram</option>
-          <option value="gptzero">GPTZero</option>
-        </select>
-      </label>
-      <label>
-        Detector API key
-        <input type="password" value={s.apiKey} onChange={(e) => setS({ ...s, apiKey: e.target.value })} placeholder="Stored only in this browser" />
-      </label>
-      <button className="primary" onClick={async () => { await saveSettings(s); onSaved(); }}>Save and re-check</button>
-    </details>
-  );
-}
-
 function DeeperCheck({ deep, ensNames, onRun }: { deep: boolean; ensNames: number; onRun: () => void }) {
   if (deep) {
-    return <p className="muted privacy">Deeper check done. Domain age, certificates, image Content Credentials{ensNames ? ", ENS names and proofs" : ""} were looked up for this page only.</p>;
+    return (
+      <p className="muted privacy">
+        Deeper check done. Domain age, certificates, image Content Credentials{ensNames ? ", ENS names and proofs" : ""} were
+        looked up for this page only. AI-written <em>text</em> isn't scored: no detector that runs without an outside account is
+        reliable enough to show a percentage.
+      </p>
+    );
   }
   return (
     <section className="privacy">
@@ -135,7 +113,7 @@ function App() {
     // Default check: the only network request is one Arkiv bucket id (often answered from cache).
     // The deeper check, only on request, also looks up domain age, certificates, ENS names and
     // proofs, and the AI detector if the user turned it on.
-    const [ctx, settings, registry] = await Promise.all([loadContext(), getSettings(), checkRegistry(page, cachedBucket)]);
+    const [ctx, registry] = await Promise.all([loadContext(), checkRegistry(page, cachedBucket)]);
     // Lists the Arkiv registry answered for are not checked again from the bundled copy.
     const covered = new Set([...registry.covered.domain, ...registry.covered.address]);
     const localCtx = {
@@ -163,7 +141,7 @@ function App() {
           weight: 0,
         };
     const [base, identity, images] = await Promise.all([
-      analyzePage(page, { ...localCtx, network: deep, aiDetector: deep ? detectorFor(settings) : undefined }),
+      analyzePage(page, { ...localCtx, network: deep }),
       deep ? checkIdentity(page, identityDeps).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
       deep
         ? checkImageCredentials(page.images ?? [])
@@ -219,6 +197,12 @@ function App() {
             <div>
               <div className="verdict">{state.result.label}</div>
               <div className="host">{state.host}</div>
+              {state.result.level === "unverified" && (
+                <div className="muted small-note">
+                  Nothing wrong found, but nothing confirms this site is legitimate either
+                  {state.deep ? "." : ". Run the deeper check for its age and certificate."}
+                </div>
+              )}
             </div>
           </section>
           {(Object.keys(CHECK_NAMES) as Finding["check"][]).map((check) => {
@@ -237,7 +221,6 @@ function App() {
         </>
       )}
       {state.status === "done" && <DeeperCheck deep={state.deep} ensNames={state.ensNames} onRun={() => void run(true)} />}
-      <SettingsPanel onSaved={() => void run(false)} />
       <footer className="muted">Every point lost comes from a finding above, with its source.</footer>
     </main>
   );

@@ -66,7 +66,8 @@ async function fetchPage(url: URL): Promise<{ snapshot: PageSnapshot; note?: str
 const ACTION: Record<CredibilityResult["level"], string> = {
   "high-risk": "DO NOT PROCEED. Don't open, pay, sign or enter any details.",
   careful: "PROCEED ONLY WITH CARE. Ask the user before entering details, paying or signing.",
-  trustworthy: "No red flags found. This isn't a guarantee; still don't share secrets like OTPs or seed phrases.",
+  trustworthy: "Looks legitimate (official or verified signals found). Still never share OTPs, PINs or seed phrases.",
+  unverified: "No red flags found, but nothing confirms this site is legitimate either. Don't share OTPs, PINs or seed phrases.",
 };
 
 /** For an agent, any single danger finding means stop, whatever the overall score. */

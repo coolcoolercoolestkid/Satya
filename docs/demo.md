@@ -57,10 +57,10 @@ against these pages.
 | http://earn-daily-tasks.localhost:5180 | 0, High risk: OFAC wallet (via Arkiv), guaranteed returns, doubling, fee to withdraw, task job, personal UPI |
 | http://pm-kisan-help.localhost:5180 | 0, High risk: claims Government of India off .gov.in, CVV, card and Aadhaar fields, no encryption |
 | http://photo-proof.localhost:5180 (after **Run deeper check**) | C.jpg: "drawn by a computer program, not AI" (test signer, not on the C2PA trust list); E-sig-CA.jpg: "broken Content Credentials label"; "Checked 3 images: 2 had them" |
-| https://example.com | 100, no warnings |
+| https://example.com | 100, "No red flags found" (grey); after Run deeper check: OV certificate, "Looks trustworthy" |
 | https://ethereum.org | 100, Official Ethereum domain |
 | https://www.onlinesbi.sbi | 100, Official State Bank of India domain |
-| https://github.com | 100, no warnings |
+| https://github.com | 100, "No red flags found"; after Run deeper check: "Looks trustworthy" if its age/certificate vouch for it |
 
 Also check:
 - [ ] The panel shows "Private by default… one bucket id" and "Checked privately against Satya's

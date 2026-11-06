@@ -1,9 +1,6 @@
 import {
-  gptZeroDetector,
-  pangramDetector,
   SEED_BRANDS,
   type AddressLabelList,
-  type AiDetector,
   type AnalyzeContext,
   type DomainList,
 } from "@satya/checks";
@@ -63,31 +60,6 @@ export function loadContext(): Promise<Omit<AnalyzeContext, "aiDetector">> {
     };
   })();
   return cached;
-}
-
-export type DetectorChoice = "none" | "pangram" | "gptzero";
-export interface Settings {
-  detector: DetectorChoice;
-  apiKey: string;
-}
-
-export async function getSettings(): Promise<Settings> {
-  const s = await chrome.storage.local.get(["detector", "apiKey"]);
-  return {
-    detector: (s.detector as DetectorChoice) ?? "none",
-    apiKey: (s.apiKey as string) ?? "",
-  };
-}
-
-export async function saveSettings(s: Settings): Promise<void> {
-  await chrome.storage.local.set(s);
-}
-
-export function detectorFor(s: Settings): AiDetector | undefined {
-  if (!s.apiKey) return undefined;
-  if (s.detector === "pangram") return pangramDetector(s.apiKey);
-  if (s.detector === "gptzero") return gptZeroDetector(s.apiKey);
-  return undefined;
 }
 
 // ---------- Satya's scam registry on Arkiv ----------

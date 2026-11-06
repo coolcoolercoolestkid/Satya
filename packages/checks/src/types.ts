@@ -50,7 +50,7 @@ export interface PageSnapshot {
 
 export interface CredibilityResult {
   score: number;
-  level: "trustworthy" | "careful" | "high-risk";
+  level: "trustworthy" | "unverified" | "careful" | "high-risk";
   label: string;
   findings: Finding[];
 }

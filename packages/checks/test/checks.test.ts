@@ -183,3 +183,14 @@ describe("AI check on the whole page", () => {
     expect((await checkAiContent("short", detector))[0]!.title).toMatch(/Not enough text/);
   });
 });
+
+describe("score labels", () => {
+  it("says 'No red flags found' when nothing vouches for a site, and keeps AI content out of the score", async () => {
+    const { scoreFindings } = await import("../src/index.js");
+    expect(scoreFindings([]).label).toBe("No red flags found");
+    const old = scoreFindings([{ check: "records", severity: "good", title: "Domain is 10+ years old", source: "RDAP", weight: 0 }]);
+    expect(old.label).toBe("Looks trustworthy");
+    const ai = scoreFindings([{ check: "ai", severity: "warning", title: "broken label", source: "C2PA", weight: 10 }]);
+    expect(ai.score).toBe(100);
+  });
+});
