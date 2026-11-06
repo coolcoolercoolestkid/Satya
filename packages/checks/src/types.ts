@@ -1,5 +1,5 @@
 /** Which of Satya's checks produced a finding. */
-export type CheckId = "phishing" | "scam" | "records" | "ai" | "identity";
+export type CheckId = "phishing" | "page" | "scam" | "records" | "ai" | "identity";
 
 /** danger = likely harmful, warning = be careful, info = worth knowing, good = positive signal. */
 export type Severity = "danger" | "warning" | "info" | "good";
@@ -19,6 +19,21 @@ export interface Finding {
   weight: number;
 }
 
+/** Structural facts about the page, read by the content script (no page text). */
+export interface PageSignals {
+  protocol: "http:" | "https:" | string;
+  /** Forms on the page: where they submit, and whether they ask for a password. */
+  forms: { actionHost: string | null; hasPassword: boolean }[];
+  /** Kinds of sensitive inputs found, e.g. "otp", "cvv", "card", "upi-pin", "aadhaar", "pan". */
+  sensitiveFields: string[];
+  /** Number of small text inputs in one form: 12 or 24 suggests a seed-phrase grid. */
+  maxInputsInOneForm: number;
+  /** Links to installable files (.apk, .exe…). */
+  downloadLinks: string[];
+  /** Hosts that serve scripts on this page. */
+  scriptHosts: string[];
+}
+
 /** What the content script reads from the page. */
 export interface PageSnapshot {
   url: string;
@@ -26,6 +41,7 @@ export interface PageSnapshot {
   /** Visible text, trimmed to a reasonable length by the caller. */
   text: string;
   hasPasswordField?: boolean;
+  signals?: PageSignals;
 }
 
 export interface CredibilityResult {

@@ -60,13 +60,20 @@ export const SATYA_NULLIFIER_SEED = 236470799660911371785784n;
 export const ANON_AADHAAR_ISSUER: Address = "0x000000000000000000000000000000000000aada";
 
 let initialised = false;
-/** Browsers download the proving key in chunks (cached locally); Node fetches it whole. */
-export async function initAnonAadhaar(origin: "chunked" | "server" = "chunked"): Promise<void> {
+/**
+ * Browsers download the proving key in chunks (cached locally); Node can fetch it whole, or use
+ * files already on disk (`local`, with paths to the three artifacts).
+ */
+export async function initAnonAadhaar(
+  origin: "chunked" | "server" | "local" = "chunked",
+  localPaths?: { wasm: string; zkey: string; vkey: string },
+): Promise<void> {
   if (initialised) return;
+  const urls = core.artifactUrls.v2;
   await core.init({
-    wasmURL: core.artifactUrls.v2.wasm,
-    zkeyURL: origin === "chunked" ? core.artifactUrls.v2.chunked : core.artifactUrls.v2.zkey,
-    vkeyURL: core.artifactUrls.v2.vk,
+    wasmURL: localPaths?.wasm ?? urls.wasm,
+    zkeyURL: localPaths?.zkey ?? (origin === "chunked" ? urls.chunked : urls.zkey),
+    vkeyURL: localPaths?.vkey ?? urls.vk,
     artifactsOrigin: core.ArtifactsOrigin[origin],
   });
   initialised = true;

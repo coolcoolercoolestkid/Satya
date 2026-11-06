@@ -5,13 +5,23 @@ import { initAnonAadhaar, proveAnonAadhaarTest, verifyAnonAadhaar } from "../src
 
 // Full Anon Aadhaar round trip with TEST data. Downloads the 612 MB proving key.
 // Run: LIVE_AADHAAR=1 HOLDER=0xYourWallet pnpm vitest run test/anonAadhaar.live.test.ts
+// Optional AA_ARTIFACTS=<dir> with vkey.json, aadhaar-verifier.wasm, circuit_final.zkey already downloaded.
 // Writes the proof to apps/web/public/test-aadhaar/proof-<holder>.json so the demo can use it.
 const HOLDER = (process.env.HOLDER ?? "0x1111111111111111111111111111111111111111") as `0x${string}`;
 const dataDir = join(__dirname, "../../../apps/web/public/test-aadhaar");
 
 describe.runIf(process.env.LIVE_AADHAAR)("Anon Aadhaar (test data)", () => {
   it("proves an adult is 18+, bound to one wallet", async () => {
-    await initAnonAadhaar("server");
+    const dir = process.env.AA_ARTIFACTS;
+    if (dir) {
+      await initAnonAadhaar("local", {
+        wasm: join(dir, "aadhaar-verifier.wasm"),
+        zkey: join(dir, "circuit_final.zkey"),
+        vkey: join(dir, "vkey.json"),
+      });
+    } else {
+      await initAnonAadhaar("server");
+    }
     const { qrData } = JSON.parse(readFileSync(join(dataDir, "adult.json"), "utf8"));
     const proof = await proveAnonAadhaarTest(qrData, HOLDER);
     writeFileSync(join(dataDir, `proof-${HOLDER.toLowerCase()}.json`), proof);

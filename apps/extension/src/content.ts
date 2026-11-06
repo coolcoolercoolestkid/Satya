@@ -11,6 +11,74 @@ const COLORS: Record<Severity, string> = {
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
 
+const FIELD_KINDS: [string, RegExp][] = [
+  ["otp", /\botp\b|one[- ]?time|verification code|one-time-code/],
+  ["cvv", /\bcvv\b|\bcvc\b|security code|cc-csc/],
+  ["card", /card ?(number|no)|cc-number|debit card|credit card/],
+  ["upi-pin", /upi ?pin|\bmpin\b/],
+  ["aadhaar", /aadha?ar/],
+  ["pan", /\bpan\b ?(no|number|card)?/],
+  ["seed-phrase", /seed|mnemonic|recovery phrase|secret phrase|secret recovery/],
+  ["private-key", /private ?key/],
+];
+
+/** Describes an input using everything that hints at what it's for. */
+function describeInput(el: HTMLInputElement | HTMLTextAreaElement): string {
+  const label = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.textContent ?? "" : "";
+  return [el.name, el.id, el.getAttribute("placeholder"), el.getAttribute("aria-label"), el.getAttribute("autocomplete"), label]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function signals() {
+  const inputs = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")].filter(
+    (el) => !["hidden", "submit", "button", "checkbox", "radio"].includes((el as HTMLInputElement).type),
+  );
+  const sensitive = new Set<string>();
+  for (const el of inputs) {
+    const d = describeInput(el);
+    for (const [kind, re] of FIELD_KINDS) if (re.test(d)) sensitive.add(kind);
+  }
+  const forms = [...document.forms].map((f) => {
+    let actionHost: string | null = null;
+    try {
+      actionHost = f.getAttribute("action") ? new URL(f.action, location.href).hostname : null;
+    } catch {
+      /* ignore */
+    }
+    return { actionHost, hasPassword: !!f.querySelector('input[type="password"]') };
+  });
+  const textInputs = (root: ParentNode) =>
+    root.querySelectorAll('input[type="text"], input[type="password"], input:not([type])').length;
+  const looseInputs = [...document.querySelectorAll('input[type="text"], input[type="password"], input:not([type])')].filter(
+    (el) => !(el as HTMLInputElement).form,
+  ).length;
+  const downloadLinks = [...document.querySelectorAll<HTMLAnchorElement>("a[href]")]
+    .map((a) => a.href)
+    .filter((h) => /\.(apk|exe|msi|scr|bat|cmd|jar|dmg|pkg|vbs|ps1)(\?|#|$)/i.test(h))
+    .slice(0, 20);
+  const scriptHosts = [
+    ...new Set(
+      [...document.querySelectorAll<HTMLScriptElement>("script[src]")].map((s) => {
+        try {
+          return new URL(s.src).hostname;
+        } catch {
+          return "";
+        }
+      }),
+    ),
+  ].filter(Boolean);
+  return {
+    protocol: location.protocol,
+    forms,
+    sensitiveFields: [...sensitive],
+    maxInputsInOneForm: Math.max(looseInputs, ...[...document.forms].map(textInputs), 0),
+    downloadLinks,
+    scriptHosts,
+  };
+}
+
 function snapshot() {
   const text = (document.body?.innerText ?? "").slice(0, MAX_TEXT);
   return {
@@ -18,6 +86,7 @@ function snapshot() {
     title: document.title,
     text,
     hasPasswordField: !!document.querySelector('input[type="password"]'),
+    signals: signals(),
   };
 }
 

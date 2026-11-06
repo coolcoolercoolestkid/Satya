@@ -8,3 +8,12 @@ dist/
 .next/
 coverage/
 apps/extension/data/
+
+# Secrets and keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+secrets/
+.secrets/

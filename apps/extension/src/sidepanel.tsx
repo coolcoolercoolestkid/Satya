@@ -11,6 +11,7 @@ import type { ContentRequest, SnapshotResponse } from "./messages";
 const ICON: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "i", good: "✓" };
 const CHECK_NAMES: Record<Finding["check"], string> = {
   phishing: "Is this site real?",
+  page: "What is it asking for?",
   records: "Past records",
   scam: "What is it saying?",
   ai: "Possibly AI",

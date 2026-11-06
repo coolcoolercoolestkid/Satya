@@ -1,4 +1,6 @@
 import { checkAiContent, type AiDetector } from "./ai.js";
+import { lookupCertificates } from "./certs.js";
+import { checkAuthority, checkStructure } from "./structure.js";
 import { checkPhishing, type PhishingContext } from "./phishing.js";
 import { checkAddresses, lookupDomainAge, type AddressLabelList } from "./records.js";
 import { checkNamedEntities, checkScamText } from "./scam.js";
@@ -7,6 +9,8 @@ import type { CredibilityResult, Finding, PageSnapshot } from "./types.js";
 
 export * from "./ai.js";
 export * from "./brands.js";
+export * from "./certs.js";
+export * from "./structure.js";
 export * from "./domain.js";
 export * from "./phishing.js";
 export * from "./records.js";
@@ -29,18 +33,21 @@ export interface AnalyzeContext {
 export async function analyzePage(page: PageSnapshot, ctx: AnalyzeContext): Promise<CredibilityResult> {
   const findings: Finding[] = [
     ...checkPhishing(page, ctx.phishing),
+    ...checkAuthority(page, ctx.phishing.brands),
+    ...checkStructure(page, ctx.phishing.brands),
     ...checkScamText(page),
     ...(ctx.namedLists ?? []).flatMap((l) => checkNamedEntities(page, l.names, l.source)),
     ...checkAddresses(page.text, ctx.addressLists ?? []),
   ];
 
   const network = ctx.network ?? true;
-  const [age, ai] = await Promise.all([
+  const [age, certs, ai] = await Promise.all([
     network ? lookupDomainAge(page.url, ctx.fetchImpl) : Promise.resolve(undefined),
+    network ? lookupCertificates(page.url, ctx.fetchImpl) : Promise.resolve([]),
     checkAiContent(page.text, ctx.aiDetector),
   ]);
   if (age) findings.push(age);
-  findings.push(...ai);
+  findings.push(...certs, ...ai);
 
   return scoreFindings(findings);
 }
