@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@contentauth/c2pa-web": "~0.15.6",
+    "@huggingface/transformers": "^3.8.1",
     "@satya/checks": "workspace:*",
     "@satya/identity": "workspace:*",
     "@satya/registry": "workspace:*",

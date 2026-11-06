@@ -31,7 +31,7 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | Checks: lookalike domains, scam wording incl. India-specific scams, risky forms and fields, gov/bank domain rules, fake app downloads | ✅ (run locally) |
 | **Arkiv public scam registry**: MetaMask phishing list + OFAC sanctioned wallets, hashed into 256 buckets, private lookup | ✅ live on Rabdi testnet, verified 256/256 buckets per list |
 | Deeper check on request: domain age (RDAP), HTTPS certificate type (Cert Spotter), ENS identity and proofs | ✅ |
-| AI content, shown separately and never part of the trust score. Images: reads Content Credentials (C2PA) labels, e.g. "made by AI", "camera photo", "label broken", with the official C2PA SDK running inside the extension | ✅ in the deeper check; tested in a browser on official C2PA test images |
+| AI content, shown separately and never part of the trust score. Text: percentage of the page judged AI-written, with the flagged passages, by [TMR](https://huggingface.co/Oxidane/tmr-ai-text-detector) (MIT licence, evaluated on the public [RAID benchmark](https://raid-bench.xyz/leaderboard)), running on your computer. Images: reads Content Credentials (C2PA) labels, e.g. "made by AI", "camera photo", "label broken", with the official C2PA SDK running inside the extension | ✅ in the deeper check; tested in a browser on official C2PA test images |
 | Identity: demo DigiLocker issuer (EIP-712 signed claims), proofs on Arkiv owned by the holder | ✅ |
 | Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ✅ real TEST-data proof made, published to Arkiv and read back verified ([record](https://rabdi.explorer.arkiv.network/entity/0x2bc7745c1a37db51b75f81b50a084a828719aaab9a00eed8a4459d8a0d2c2afd)); proving inside the browser not yet timed |
 | **Scam evidence**: Save a page (text, screenshot, findings) to a file; anchor only its SHA-256 fingerprint on Arkiv; anyone can later check the file is unchanged and when it was anchored | ✅ file check tested in a browser; extension capture not yet tried in Chrome |
@@ -134,6 +134,7 @@ Every flag shows its source. Satya only uses information that is already public.
 | Sanctioned Ethereum addresses | US Treasury OFAC SDN list (official `SDN.XML`), mirrored on Arkiv by Satya. The extension's offline fallback copy comes from [0xB10C/ofac-sanctioned-digital-currency-addresses](https://github.com/0xB10C/ofac-sanctioned-digital-currency-addresses) | Public domain / MIT |
 | Domain registration dates (deeper check only) | [RDAP](https://rdap.org) | Public registry data |
 | HTTPS certificate history (deeper check only) | [Cert Spotter](https://sslmate.com/certspotter/) | Public CT logs |
+| AI-text detector model (full check only; runs on your computer) | [TMR](https://huggingface.co/Oxidane/tmr-ai-text-detector), ONNX build by [onnx-community](https://huggingface.co/onnx-community/tmr-ai-text-detector-ONNX) | MIT |
 
 For real people, Satya only shows proofs they created or public lists they appear on. It
 never labels a real person on its own judgment.
@@ -165,8 +166,9 @@ forms, gov/bank domain rules) run locally against rules and lists shipped with t
 - the page's larger images (up to 8) are fetched again from the sites that served them, mostly
   from the browser cache and without cookies, to read their Content Credentials on your
   computer;
-- nothing is ever sent to an AI-detection service. AI-written text isn't scored, because no
-  detector that runs without an outside account is accurate enough to show a percentage.
+- the page's text is checked for AI writing **on your computer**: the detector model is downloaded
+  once from Hugging Face (129 MB, then cached) and runs inside the extension. The text itself is
+  never sent anywhere, and no AI-detection service or account is used.
 
 **No analytics, no trackers, no accounts.** The extension and web app load no third-party
 scripts or fonts.

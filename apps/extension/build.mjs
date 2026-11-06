@@ -13,6 +13,10 @@ const c2paDist = fileURLToPath(new URL("./node_modules/@contentauth/c2pa-web/dis
 mkdirSync("dist/c2pa", { recursive: true });
 cpSync(`${c2paDist}c2pa_worker.js`, "dist/c2pa/c2pa_worker.js");
 cpSync(`${c2paDist}resources/c2pa_bg.wasm`, "dist/c2pa/c2pa_bg.wasm");
+// ONNX runtime for the on-device AI-text detector: its WebAssembly ships inside the extension.
+const ortDist = fileURLToPath(new URL("./node_modules/@huggingface/transformers/dist/", import.meta.url));
+mkdirSync("dist/ort", { recursive: true });
+for (const f of ["ort-wasm-simd-threaded.jsep.mjs", "ort-wasm-simd-threaded.jsep.wasm"]) cpSync(ortDist + f, `dist/ort/${f}`);
 
 // Anon Aadhaar's compiled build imports Node's "crypto"; point it at a browser stand-in.
 const nodeShims = {
@@ -28,6 +32,7 @@ const options = {
     background: "src/background.ts",
     content: "src/content.ts",
     sidepanel: "src/sidepanel.tsx",
+    "ai-worker": "src/aiWorker.ts",
   },
   bundle: true,
   format: "iife",

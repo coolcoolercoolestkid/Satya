@@ -1,10 +1,11 @@
-import { analyzePage, buildEvidence, credentialFindings, metadataFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
+import { aiFindings, analyzePage, buildEvidence, credentialFindings, metadataFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
 import { checkIdentity, checkSiteEns, defaultIdentityDeps, ensNamesOnPage } from "@satya/identity";
 import { checkRegistry, lookupVerifiedContracts, SOURCIFY_ON_ARKIV, type RegistryResult, type VerifiedContract } from "@satya/registry";
 import { freeHostOf } from "@satya/checks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { checkImageCredentials, type ImageCheck } from "./c2pa";
+import { DETECTOR_NAME, detectAiText } from "./aiText";
 import { BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
@@ -49,6 +50,11 @@ interface Done {
   /** Contract addresses on the page, and which of them Sourcify (on Arkiv) knows. */
   contracts?: { asked: number; verified: VerifiedContract[] };
 }
+/** On-device AI-text check: runs after the receipt shows, so a first-time model download never blocks it. */
+type AiText =
+  | { status: "off" }
+  | { status: "running"; loaded?: number; total?: number }
+  | { status: "done"; findings: Finding[] };
 type State = { status: "loading" } | { status: "unsupported"; url?: string } | Done;
 
 const short = (h: string, n = 4) => (h.length > 2 * n + 2 ? `${h.slice(0, n + 2)}…${h.slice(-n)}` : h);
@@ -353,10 +359,22 @@ function Breakdown({ s }: { s: Done }) {
   );
 }
 
-function Receipt({ s, onDeep }: { s: Done; onDeep: () => void }) {
+function AiTextStatus({ ai }: { ai: AiText }) {
+  if (ai.status !== "running") return null;
+  const mb = (n?: number) => (n ? Math.round(n / 1e6) : 0);
+  return (
+    <div className="hint">
+      {ai.total && ai.loaded! < ai.total
+        ? `Loading the AI-text detector: ${mb(ai.loaded)} of ${mb(ai.total)} MB (downloaded once, then cached). Your page text stays on this device.`
+        : "Reading the page's text for AI writing, on this device…"}
+    </div>
+  );
+}
+
+function Receipt({ s, onDeep, aiText }: { s: Done; onDeep: () => void; aiText: AiText }) {
   const { result } = s;
   const wrong = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && (f.severity === "danger" || f.severity === "warning"));
-  const ai = result.findings.filter((f) => f.check === "ai" && !f.title.startsWith("Checked "));
+  const ai = [...(aiText.status === "done" ? aiText.findings : []), ...result.findings.filter((f) => f.check === "ai" && !f.title.startsWith("Checked "))];
   const people = result.findings.filter((f) => f.check === "identity" && f.severity !== "info");
   const notes = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && f.severity === "info");
   const conf = confidence(s);
@@ -381,6 +399,12 @@ function Receipt({ s, onDeep }: { s: Done; onDeep: () => void }) {
         <Checks rows={checklist(s)} />
         <Section title="People on this page" items={people} tabId={s.tabId} />
         <Section title="AI content · not scored" items={ai} tabId={s.tabId} />
+        {aiText.status === "running" && (
+          <section className="sec">
+            <div className="eyebrow">AI content · not scored</div>
+            <AiTextStatus ai={aiText} />
+          </section>
+        )}
         <HowChecked s={s} notes={notes} />
       </article>
       <Actions s={s} onDeep={onDeep} />
@@ -411,9 +435,13 @@ function App() {
   /** undefined until the user chooses; then remembered. */
   const [full, setFull] = useState<boolean | undefined | null>(null);
   const fullRef = useRef(false);
+  const [aiText, setAiText] = useState<AiText>({ status: "off" });
+  const runId = useRef(0);
 
   const run = useCallback(async (deep = false) => {
+    const myRun = ++runId.current;
     setState({ status: "loading" });
+    setAiText({ status: "off" });
     const tab = await activeTab();
     if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) {
       setState({ status: "unsupported", url: tab?.url });
@@ -473,6 +501,7 @@ function App() {
       images,
       contracts: deep && addresses.length ? { asked: addresses.length, verified } : undefined,
     });
+    if (deep) void checkAiText(page.mainText || page.text, myRun);
     await sendToTab(tab.id, {
       type: "highlight",
       items: result.findings
@@ -480,6 +509,28 @@ function App() {
         .map((f) => ({ evidence: f.evidence!, severity: f.severity, title: f.title })),
     });
   }, []);
+
+  /** Runs the on-device detector; ignores results from a page the user has since left. */
+  const checkAiText = async (text: string, myRun: number) => {
+    setAiText({ status: "running" });
+    try {
+      const d = await detectAiText(text, (loaded, total) => {
+        if (runId.current === myRun) setAiText({ status: "running", loaded, total });
+      });
+      if (runId.current !== myRun) return;
+      const findings: Finding[] =
+        "tooShort" in d
+          ? [{ check: "ai", severity: "info", title: "Not enough text to judge if it's AI-written", source: DETECTOR_NAME, weight: 0 }]
+          : aiFindings(d);
+      setAiText({ status: "done", findings });
+    } catch (err) {
+      if (runId.current !== myRun) return;
+      setAiText({
+        status: "done",
+        findings: [{ check: "ai", severity: "info", title: "AI-text check unavailable", detail: err instanceof Error ? err.message : String(err), source: DETECTOR_NAME, weight: 0 }],
+      });
+    }
+  };
 
   const choose = (v: boolean) => {
     fullRef.current = v;
@@ -518,7 +569,7 @@ function App() {
       {state.status === "unsupported" && (
         <div className="receipt"><p className="none">Open a website to check it. If you just reloaded Satya, reload the page too.</p></div>
       )}
-      {state.status === "done" && <Receipt s={state} onDeep={() => void run(true)} />}
+      {state.status === "done" && <Receipt s={state} onDeep={() => void run(true)} aiText={aiText} />}
       <footer className="build">
         {full !== null && full !== undefined && (
           <button className="link" onClick={() => choose(!full)}>

@@ -5,5 +5,8 @@ packages:
 allowBuilds:
   esbuild: true
   blake-hash: false
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
 overrides:
   "@zk-email/helpers>snarkjs": "0.7.6"
