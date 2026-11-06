@@ -90,6 +90,19 @@ curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network -H 'content-type: appli
 It returns the newest record per source for that bucket: source, date, number of hashes,
 and the SHA-256 and URL of the source file it was built from.
 
+**Look up a sanctioned wallet directly** (OFAC is also mirrored as one plain record per address):
+
+```bash
+curl -s https://rpc.rabdi.db-chain.testnet.arkiv.network -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":["arkiv.schema = str('"'"'satya_sanctioned_address_v1'"'"') AND address = addr(0x0330070fd38ec3bb94f58fa55d40368271e9e54a) AND $owner = addr(0x0D341d00bB9c2327033f447b45Ebb8712521E736)",{"select":{"key":true,"attributes":{"name":true,"program":true,"sdnType":true,"currency":true,"date":true}},"limit":"0x5"}]}'
+```
+
+→ `AMNOKGANG TECHNOLOGY DEVELOPMENT COMPANY · DPRK4 · Entity · ETH`. Swap the address filter
+for `program = str('DPRK4')` to list every address under one sanctions programme. If the public
+endpoint answers `ANON_COST_LIMITED`, wait a minute or use an Arkiv access key.
+
+Judging write-ups: [reach](arkiv/reach.md) · [why Arkiv](arkiv/why-arkiv.md) ·
+[data quality](arkiv/data-quality.md) · [schema](arkiv/schema.md) · [friction](arkiv/friction.md).
+
 **Check a domain or wallet the way the extension does, and verify the registry against the
 official lists** (after `pnpm install`):
 
