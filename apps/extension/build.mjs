@@ -31,7 +31,6 @@ const options = {
   entryPoints: {
     background: "src/background.ts",
     content: "src/content.ts",
-    sidepanel: "src/sidepanel.tsx",
     "ai-worker": "src/aiWorker.ts",
   },
   bundle: true,
@@ -52,9 +51,18 @@ const options = {
   },
 };
 
+// The side panel is an ES module split into chunks, so the large identity (Anon Aadhaar) and
+// image (C2PA) code loads only when a full check needs it.
+const panel = {
+  ...options,
+  entryPoints: { sidepanel: "src/sidepanel.tsx" },
+  format: "esm",
+  splitting: true,
+  chunkNames: "chunks/[name]-[hash]",
+};
+
 if (watch) {
-  const ctx = await esbuild.context(options);
-  await ctx.watch();
+  for (const o of [options, panel]) await (await esbuild.context(o)).watch();
 } else {
-  await esbuild.build(options);
+  await Promise.all([esbuild.build(options), esbuild.build(panel)]);
 }

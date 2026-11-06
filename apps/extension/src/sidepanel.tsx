@@ -1,19 +1,27 @@
 import { aiFindings, analyzePage, buildEvidence, credentialFindings, metadataFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
-import { checkIdentity, checkSiteEns, defaultIdentityDeps, ensNamesOnPage } from "@satya/identity";
 import { checkRegistry, lookupVerifiedContracts, SOURCIFY_ON_ARKIV, type RegistryResult, type VerifiedContract } from "@satya/registry";
 import { freeHostOf } from "@satya/checks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { checkImageCredentials, type ImageCheck } from "./c2pa";
+import type { ImageCheck } from "./c2pa";
 import { DETECTOR_NAME, detectAiText } from "./aiText";
-import { BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
+import { BUNDLED_DOMAIN_SOURCES, BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
 declare const __ARKIV_ACCESS_KEY__: string;
 declare const __SATYA_WEB_URL__: string;
 declare const __BUILD_TIME__: string;
 
-const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
+/** Identity (Anon Aadhaar, ENS) and image code is large, so it loads only when a full check runs. */
+let identityModule: Promise<typeof import("@satya/identity")> | undefined;
+const loadIdentity = () => (identityModule ??= import("@satya/identity"));
+/** A full-check lookup never holds up the panel longer than this. */
+const LOOKUP_MS = 8000;
+function withTimeout<T>(p: Promise<T>, fallback: T, ms = LOOKUP_MS): Promise<T> {
+  return Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+}
+/** fetch with a time limit, for the domain age, certificate and archive lookups. */
+const timedFetch: typeof fetch = (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(LOOKUP_MS - 1000) });
 const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
 const MEANING: Record<CredibilityResult["level"], string> = {
@@ -44,6 +52,8 @@ interface Done {
   windowId: number;
   deep: boolean;
   ensNames: number;
+  /** The quick result is showing and the full check is still running. */
+  pending?: boolean;
   page: SnapshotResponse;
   registry: RegistryResult;
   images?: ImageCheck;
@@ -217,6 +227,7 @@ function checklist(s: Done): Row[] {
   const shared = f.find((x) => /^Hosted on .+, where anyone can make a site$/.test(x.title));
   const deepRow = (label: string, re: RegExp) => {
     if (!s.deep) return rows.push({ label, status: "skip", value: "Full check" });
+    if (s.pending) return rows.push({ label, status: "skip", value: "Checking…" });
     const hit = pick("records", re)[0];
     if (shared && hit?.severity === "info" && /hosting service/.test(hit.detail ?? "")) return rows.push({ label, status: "value", value: "Belongs to the host" });
     rows.push({ label, status: hit ? (hit.severity === "good" ? "pass" : hit.severity === "info" ? "value" : sev([hit])) : "value", value: hit ? shortValue(hit.title) : "Unknown" });
@@ -224,7 +235,7 @@ function checklist(s: Done): Row[] {
   deepRow("Domain age", /^Domain is/);
   deepRow("Certificate", /certificate/i);
   deepRow("History online", /^(Online since|Online for|First seen|The Internet Archive has never)/);
-  if (s.deep) {
+  if (s.deep && !s.pending) {
     const ens = f.find((x) => / links to this site$/.test(x.title));
     rows.push({ label: "Its ENS name links back here", status: ens ? "pass" : "value", value: ens ? ens.title.replace(" links to this site", "") : "No" });
   }
@@ -389,7 +400,7 @@ function Receipt({ s, onDeep, aiText }: { s: Done; onDeep: () => void; aiText: A
             <p className="meaning">{MEANING[result.level]}</p>
             <div className="meta">
               <span className={`conf ${conf.tone}`}>{conf.label}</span>
-              <span className="mode">{s.deep ? "Full check" : "Quick check"}</span>
+              <span className="mode">{s.pending ? "Full check running…" : s.deep ? "Full check" : "Quick check"}</span>
             </div>
           </div>
         </div>
@@ -453,7 +464,10 @@ function App() {
       return;
     }
     // Default check: the only network request is one Arkiv bucket id (often answered from cache).
-    const [ctx, registry] = await Promise.all([loadContext(), checkRegistry(page, cachedBucket)]);
+    const registry = await checkRegistry(page, cachedBucket);
+    // The bundled domain lists are needed only for lists Arkiv didn't answer for.
+    const bundledNeeded = BUNDLED_DOMAIN_SOURCES.some((src) => !registry.covered.domain.includes(src));
+    const ctx = await loadContext(bundledNeeded);
     // Lists the Arkiv registry answered for are not checked again from the bundled copy.
     const covered = new Set([...registry.covered.domain, ...registry.covered.address]);
     const localCtx = {
@@ -464,17 +478,60 @@ function App() {
         : (ctx.addressLists ?? []).filter((l) => !covered.has(BUNDLED_TO_REGISTRY[l.source] ?? "")),
     };
     const host = new URL(page.url).hostname;
-    const addresses = [...new Set((page.text.match(/\b0x[a-fA-F0-9]{40}\b/g) ?? []).map((a) => a.toLowerCase()))].slice(0, 5);
-    const [base, identity, images, siteEns, verified] = await Promise.all([
-      analyzePage(page, { ...localCtx, network: deep }),
-      deep ? checkIdentity(page, identityDeps).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
-      deep
-        ? checkImageCredentials(page.images ?? []).catch((e): ImageCheck => ({ creds: [], found: 0, checked: 0, errors: [String(e)], metadata: [] }))
-        : Promise.resolve(undefined),
+    const highlight = (result: CredibilityResult) =>
+      sendToTab(tab.id!, {
+        type: "highlight",
+        items: result.findings
+          .filter((f) => f.evidence && f.check !== "phishing" && (f.severity === "danger" || f.severity === "warning"))
+          .map((f) => ({ evidence: f.evidence!, severity: f.severity, title: f.title })),
+      });
+
+    // 1. Quick check: local rules plus the Arkiv lists. Shown straight away.
+    const quick = await analyzePage(page, { ...localCtx, network: false });
+    if (runId.current !== myRun) return;
+    const quickResult = scoreFindings([...quick.findings, ...registry.findings]);
+    const base: Done = {
+      status: "done",
+      host,
+      result: quickResult,
+      tabId: tab.id,
+      windowId: tab.windowId,
+      deep,
+      pending: deep,
+      ensNames: 0,
+      page,
+      registry,
+    };
+    setState(base);
+    void highlight(quickResult);
+    if (!deep) return;
+
+    // 2. Full check: every lookup runs at once, each with a time limit, then the receipt updates.
+    void checkAiText(page.mainText || page.text, myRun);
+    const addresses = [...new Set((page.text.match(/0x[a-fA-F0-9]{40}/g) ?? []).map((a) => a.toLowerCase()))].slice(0, 5);
+    const noImages: ImageCheck = { creds: [], found: 0, checked: 0, errors: [], metadata: [] };
+    const [full, identity, images, siteEns, verified, ensNames] = await Promise.all([
+      withTimeout(analyzePage(page, { ...localCtx, network: true, fetchImpl: timedFetch }), quick, LOOKUP_MS + 1000),
+      withTimeout(
+        loadIdentity().then((id) => id.checkIdentity(page, id.defaultIdentityDeps(__ARKIV_ACCESS_KEY__))),
+        [] as Finding[],
+      ),
+      withTimeout(
+        import("./c2pa").then((m) => m.checkImageCredentials(page.images ?? [])),
+        { ...noImages, errors: ["Image check took too long"] },
+        LOOKUP_MS + 4000,
+      ),
       // The brand's own ENS name linking here is strong proof; never on shared hosts.
-      deep && !freeHostOf(host) ? checkSiteEns(host, identityDeps.ens).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
-      deep && addresses.length ? lookupVerifiedContracts(addresses).catch(() => [] as VerifiedContract[]) : Promise.resolve([] as VerifiedContract[]),
+      freeHostOf(host)
+        ? Promise.resolve([] as Finding[])
+        : withTimeout(
+            loadIdentity().then((id) => id.checkSiteEns(host, id.defaultIdentityDeps(__ARKIV_ACCESS_KEY__).ens)),
+            [] as Finding[],
+          ),
+      addresses.length ? withTimeout(lookupVerifiedContracts(addresses), [] as VerifiedContract[]) : Promise.resolve([] as VerifiedContract[]),
+      loadIdentity().then((id) => id.ensNamesOnPage(page).length).catch(() => 0),
     ]);
+    if (runId.current !== myRun) return;
     const contractFindings: Finding[] = verified.map((c) => ({
       check: "records",
       severity: "info",
@@ -484,30 +541,20 @@ function App() {
       evidence: c.address,
       weight: 0,
     }));
-    const imageFindings = images
-      ? [...credentialFindings(images.creds, images.checked), ...metadataFindings(images.metadata.filter((m) => !images.creds.some((c) => c.url === m.url)))]
-      : [];
-    const result = scoreFindings([...base.findings, ...registry.findings, ...identity, ...imageFindings, ...siteEns, ...contractFindings]);
+    const imageFindings = [
+      ...credentialFindings(images.creds, images.checked),
+      ...metadataFindings(images.metadata.filter((m) => !images.creds.some((c) => c.url === m.url))),
+    ];
+    const result = scoreFindings([...full.findings, ...registry.findings, ...identity, ...imageFindings, ...siteEns, ...contractFindings]);
     setState({
-      status: "done",
-      host: new URL(page.url).hostname,
+      ...base,
       result,
-      tabId: tab.id,
-      windowId: tab.windowId,
-      deep,
-      ensNames: ensNamesOnPage(page).length,
-      page,
-      registry,
+      pending: false,
+      ensNames,
       images,
-      contracts: deep && addresses.length ? { asked: addresses.length, verified } : undefined,
+      contracts: addresses.length ? { asked: addresses.length, verified } : undefined,
     });
-    if (deep) void checkAiText(page.mainText || page.text, myRun);
-    await sendToTab(tab.id, {
-      type: "highlight",
-      items: result.findings
-        .filter((f) => f.evidence && f.check !== "phishing" && (f.severity === "danger" || f.severity === "warning"))
-        .map((f) => ({ evidence: f.evidence!, severity: f.severity, title: f.title })),
-    });
+    void highlight(result);
   }, []);
 
   /** Runs the on-device detector; ignores results from a page the user has since left. */
