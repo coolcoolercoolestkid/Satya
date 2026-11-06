@@ -388,3 +388,52 @@ export function parseSdnAddresses(xml: string): SdnAddress[] {
   }
   return [...out.values()];
 }
+
+// ---------- Verified contracts: Arkiv's Sourcify mirror ----------
+
+/** Arkiv's mirror of Sourcify (8M+ verified Ethereum mainnet contracts), on the Sorbet testnet. */
+export const SOURCIFY_ON_ARKIV = {
+  rpc: "https://rpc.sorbet.db-chain.testnet.arkiv.network",
+  owner: "0x73d44f158a6990b50b9951532ea2032983a9fc72",
+  explorer: "https://sourcify.arkiv.network",
+};
+
+export interface VerifiedContract {
+  address: string;
+  name: string;
+  match: string;
+  compiler: string;
+}
+
+/**
+ * Looks up contract addresses in Arkiv's Sourcify mirror: verified source code, and the contract's
+ * real name. Unverified addresses (or plain wallets) simply return nothing.
+ */
+export async function lookupVerifiedContracts(addresses: string[], fetchImpl: typeof fetch = fetch): Promise<VerifiedContract[]> {
+  const out: VerifiedContract[] = [];
+  for (const a of addresses.slice(0, 5)) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(a)) continue;
+    const query = `projectid = str('sourcify') AND $owner = addr(${SOURCIFY_ON_ARKIV.owner}) AND kind = str('verified_contract') AND chainid = u64(1) AND address = addr(${a.toLowerCase()})`;
+    try {
+      const res = await fetchImpl(SOURCIFY_ON_ARKIV.rpc, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "arkiv_query",
+          params: [query, { select: { key: true, attributes: { name: true, match: true, compilerversion: true } }, limit: "0x1" }],
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const body = (await res.json()) as { result?: { data?: { attributes?: { name: string; value: string }[] }[] } };
+      const attrs = body.result?.data?.[0]?.attributes;
+      if (!attrs) continue;
+      const get = (n: string) => attrs.find((x) => x.name === n)?.value ?? "";
+      out.push({ address: a.toLowerCase(), name: get("name"), match: get("match"), compiler: get("compilerversion") });
+    } catch {
+      /* unreachable or rate-limited: say nothing */
+    }
+  }
+  return out;
+}

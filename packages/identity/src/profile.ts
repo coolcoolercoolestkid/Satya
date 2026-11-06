@@ -224,3 +224,34 @@ export async function checkIdentity(page: PageSnapshot, deps: IdentityDeps): Pro
   }
   return findings;
 }
+
+/**
+ * Does the brand's own ENS name link back to this site? For example uniswap.eth's "url" record.
+ * Only the owner of the ENS name can set that record, so a match is strong, independent proof
+ * that this is the real site. Tries "<site name>.eth".
+ */
+export async function checkSiteEns(host: string, ens: EnsResolver): Promise<Finding[]> {
+  const h = host.replace(/^www\./, "").toLowerCase();
+  const parts = h.split(".");
+  const label = parts.length >= 2 ? parts[parts.length - 2] : undefined;
+  if (!label || label.length < 3) return [];
+  const name = `${label}.eth`;
+  try {
+    const url = await ens.text(name, "url");
+    if (!url) return [];
+    const linked = new URL(/^https?:/.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase();
+    if (linked === h || h.endsWith(`.${linked}`)) {
+      return [{
+        check: "phishing",
+        severity: "good",
+        title: `${name} links to this site`,
+        detail: `The ENS name ${name} lists ${linked} as its website. Only the name's owner can set that.`,
+        source: `ENS record "url" of ${name}`,
+        weight: 15,
+      }];
+    }
+  } catch {
+    /* no such name or no record */
+  }
+  return [];
+}
