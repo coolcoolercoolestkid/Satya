@@ -4,7 +4,7 @@
 
 Every list on Arkiv was rebuilt from its official source and compared bucket by bucket with
 `publish-registry verify`, which downloads the source, recomputes all 256 buckets and compares
-them with what Arkiv returns (6 Nov 2026):
+them with what Arkiv returns (6 Nov 2026). **All 7 lists: 1,792 of 1,792 buckets match.**
 
 | Source id | Entries | Verify result |
 |---|---|---|
@@ -12,9 +12,9 @@ them with what Arkiv returns (6 Nov 2026):
 | `metamask-phishing` | 115,817 domains | 256/256 buckets match |
 | `phishing-database` | 391,557 domains | 256/256 buckets match |
 | `blp-fraud` | 256,184 domains | 256/256 buckets match |
-| `blp-scam` | 8,527 domains | first run timed out under public-RPC rate limiting; re-run pending |
-| `blp-piracy` | 2,154 domains | pending (same) |
-| `blp-ransomware` | 1,904 domains | pending (same) |
+| `blp-scam` | 8,527 domains | 256/256 buckets match |
+| `blp-piracy` | 2,154 domains | 256/256 buckets match |
+| `blp-ransomware` | 1,904 domains | 256/256 buckets match |
 
 Each record stores the **SHA-256 and URL of the exact source file** it was built from, so anyone
 can re-run `verify` against the same file, or against today's file to see what changed.
