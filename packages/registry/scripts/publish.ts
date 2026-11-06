@@ -27,6 +27,7 @@ import {
   buildBuckets,
   fetchBucket,
   hashesOf,
+  MAX_BUCKET_BYTES,
   ScamBucket,
   sha256Hex,
   SOURCES,
@@ -98,6 +99,9 @@ async function publish(which: string, file: string | undefined, dryRun: boolean)
   const buckets = await buildBuckets(info.type, src.values);
   const nonEmpty = [...buckets.values()].filter((b) => b.length).length;
   console.log(`${info.label}: ${src.values.length} entries in ${nonEmpty} non-empty buckets. Source SHA-256 ${src.sha256}`);
+  const largest = Math.max(...[...buckets.values()].map((b) => b.length));
+  console.log(`Largest bucket: ${(largest / 1024).toFixed(1)} KB (Arkiv limit ${MAX_BUCKET_BYTES / 1024} KB)`);
+  if (largest > MAX_BUCKET_BYTES) throw new Error("A bucket is over Arkiv's size limit; nothing was published.");
   if (dryRun) return;
 
   const account = publisher();

@@ -42,3 +42,13 @@ describe("scam registry buckets", () => {
     expect(hits[0]?.source.label).toBe("US Treasury OFAC SDN list");
   });
 });
+
+describe("shared hosting sites", () => {
+  it("treats each site on a shared host as its own site", async () => {
+    const { siteOf } = await import("../src/index.js");
+    expect(siteOf("login.scam-one.pages.dev")).toBe("scam-one.pages.dev");
+    expect(siteOf("scam-two.netlify.app")).toBe("scam-two.netlify.app");
+    expect(siteOf("www.example.co.in")).toBe("example.co.in");
+    expect(domainCandidates("a.scam-one.pages.dev")).toEqual(["a.scam-one.pages.dev", "scam-one.pages.dev"]);
+  });
+});

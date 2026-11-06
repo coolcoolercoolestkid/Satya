@@ -17,6 +17,7 @@ import { rabdi } from "@arkiv-network/sdk/chains";
 import { desc, eq } from "@arkiv-network/sdk/query";
 import { bytes, defineSchema, str, u64 } from "@arkiv-network/sdk/schema";
 import { registrableDomain } from "@satya/checks/src/domain.js";
+import { FREE_HOSTS } from "@satya/checks/src/structure.js";
 import { http, type Address, type Hex } from "viem";
 
 export const ScamBucket = defineSchema("satya_scam_bucket_v1", {
@@ -86,18 +87,39 @@ export function normalizeDomain(d: string): string {
 export const normalizeAddress = (a: string) => a.trim().toLowerCase();
 
 /**
+ * Hosting services where every subdomain is a different person's site. They work like
+ * ".co.in": "scam.pages.dev" is its own site, not part of "pages.dev". (Arkiv caps a record
+ * at 128 KB, and without this the ~15,000 listed "*.pages.dev" sites would all land in one
+ * bucket.)
+ */
+export const SHARED_HOST_SUFFIXES = [
+  ...new Set([...FREE_HOSTS, "wixstudio.com", "gitbook.io", "typedream.app", "workers.dev", "arweave.net", "godaddysites.com"]),
+].sort((a, b) => b.length - a.length);
+
+/** The site a domain belongs to: its registrable domain, or one label under a shared host. */
+export function siteOf(domain: string): string {
+  const h = normalizeDomain(domain);
+  const shared = SHARED_HOST_SUFFIXES.find((s) => h.endsWith(`.${s}`));
+  if (shared) {
+    const rest = h.slice(0, -(shared.length + 1));
+    return `${rest.slice(rest.lastIndexOf(".") + 1)}.${shared}`;
+  }
+  return registrableDomain(h);
+}
+
+/**
  * Which bucket a value lives in. Domains go by their registrable domain, so a site and its
  * subdomains ("login.evil.com", "evil.com") share one bucket and one lookup covers them all.
  */
 export async function bucketOf(type: SourceInfo["type"], value: string): Promise<string> {
-  const key = type === "domain" ? registrableDomain(normalizeDomain(value)) : normalizeAddress(value);
+  const key = type === "domain" ? siteOf(value) : normalizeAddress(value);
   return (await sha256Hex(key)).slice(0, 2);
 }
 
 /** The values to test for a visited host: the host itself and each parent up to the registrable domain. */
 export function domainCandidates(host: string): string[] {
   const h = normalizeDomain(host);
-  const base = registrableDomain(h);
+  const base = siteOf(h);
   const out = [h];
   let rest = h;
   while (rest !== base && rest.includes(".")) {
@@ -128,6 +150,9 @@ export async function buildBuckets(type: SourceInfo["type"], values: string[]): 
   }
   return out;
 }
+
+/** Arkiv's limit on one bytes value. */
+export const MAX_BUCKET_BYTES = 128 * 1024;
 
 /** Splits a bucket's payload back into hex hashes. */
 export function hashesOf(payload: Uint8Array): Set<string> {
