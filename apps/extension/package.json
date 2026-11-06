@@ -9,12 +9,13 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@contentauth/c2pa-web": "~0.15.6",
     "@satya/checks": "workspace:*",
     "@satya/identity": "workspace:*",
+    "@satya/registry": "workspace:*",
     "buffer": "^6.0.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@satya/registry": "workspace:*"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

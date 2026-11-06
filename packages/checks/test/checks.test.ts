@@ -121,7 +121,7 @@ describe("records check", () => {
 describe("AI check", () => {
   it("words results as signals", () => {
     const f = aiFindings({ detector: "Test", fractionAi: 0.9, label: "AI", aiSegments: ["A passage."] });
-    expect(f[0]!.title).toMatch(/Likely AI-generated/);
+    expect(f[0]!.title).toBe("90% of this page's text looks AI-written");
     expect(f[0]!.detail).toMatch(/can be wrong/);
     expect(f[1]!.evidence).toBe("A passage.");
   });
@@ -166,5 +166,20 @@ describe("analyzePage", () => {
       network: false,
     });
     expect(r.level).toBe("trustworthy");
+  });
+});
+
+describe("AI check on the whole page", () => {
+  it("uses the main text, highlights every AI passage, and says when there's too little text", async () => {
+    const { checkAiContent, analyzePage, SEED_BRANDS } = await import("../src/index.js");
+    const seen: string[] = [];
+    const detector = { name: "Fake", detect: async (t: string) => { seen.push(t); return { detector: "Fake", fractionAi: 0.62, label: "Mixed", aiSegments: Array.from({ length: 12 }, (_, i) => `Passage ${i}`) }; } };
+    const main = "A long paragraph of the article. ".repeat(20);
+    const r = await analyzePage({ url: "https://blog.example/post", title: "", text: "Menu Home About " + main, mainText: main }, { phishing: { brands: SEED_BRANDS, lists: [] }, network: false, aiDetector: detector });
+    expect(seen[0]).not.toMatch(/Menu Home/);
+    const ai = r.findings.filter((f) => f.check === "ai");
+    expect(ai[0]!.title).toBe("62% of this page's text looks AI-written");
+    expect(ai.filter((f) => f.evidence).length).toBe(10);
+    expect((await checkAiContent("short", detector))[0]!.title).toMatch(/Not enough text/);
   });
 });

@@ -30,7 +30,8 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | Checks: lookalike domains, scam wording incl. India-specific scams, risky forms and fields, gov/bank domain rules, fake app downloads | ✅ (run locally) |
 | **Arkiv public scam registry**: MetaMask phishing list + OFAC sanctioned wallets, hashed into 256 buckets, private lookup | ✅ live on Rabdi testnet, verified 256/256 buckets per list |
 | Deeper check on request: domain age (RDAP), HTTPS certificate type (Cert Spotter), ENS identity and proofs | ✅ |
-| AI-written-text detector (Pangram or GPTZero, your own key) | ✅ off by default |
+| AI-written text: page-wide "X% looks AI-written" with every AI paragraph highlighted (Pangram or GPTZero, your own key) | ✅ off by default; tested with a stand-in detector, not a live key |
+| AI images: reads Content Credentials (C2PA) labels, e.g. "made by AI", "camera photo", "label broken", with the official C2PA SDK running inside the extension | ✅ in the deeper check; tested in a browser on official C2PA test images |
 | Identity: demo DigiLocker issuer (EIP-712 signed claims), proofs on Arkiv owned by the holder | ✅ |
 | Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ✅ real TEST-data proof made, published to Arkiv and read back verified ([record](https://rabdi.explorer.arkiv.network/entity/0x2bc7745c1a37db51b75f81b50a084a828719aaab9a00eed8a4459d8a0d2c2afd)); proving inside the browser not yet timed |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
@@ -108,7 +109,10 @@ forms, gov/bank domain rules) run locally against rules and lists shipped with t
   [Cert Spotter](https://sslmate.com/certspotter/) (its HTTPS certificates);
 - ENS names written on the page to a public Ethereum node (publicnode.com), and the wallet
   addresses they point to, to Arkiv, to load and verify those people's proofs;
-- the page's text to Pangram or GPTZero, **only** if you turned on the AI-written-text
+- the page's larger images (up to 8) are fetched again from the sites that served them, mostly
+  from the browser cache and without cookies, to read their Content Credentials on your
+  computer;
+- the page's main text to Pangram or GPTZero, **only** if you turned on the AI-written-text
   detector in settings (off by default) and gave it your own API key.
 
 **No analytics, no trackers, no accounts.** The extension and web app load no third-party

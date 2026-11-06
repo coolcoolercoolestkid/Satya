@@ -1,0 +1,67 @@
+import { createC2pa, Reader } from "@contentauth/c2pa-web";
+
+type C2pa = Awaited<ReturnType<typeof createC2pa>>;
+import { readCredential, type ImageCredential, type ManifestStoreLike } from "@satya/checks";
+
+/** Images larger than this are skipped (a label is read from the whole file). */
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
+let c2pa: Promise<C2pa> | undefined;
+
+/**
+ * The SDK only accepts an https: worker URL, a guard meant for web pages. An extension's own
+ * files are served from chrome-extension://, which is just as trustworthy (packaged with the
+ * extension, same origin as the side panel), so we hand it the extension URL in a form that
+ * passes that guard. The worker itself is still created from the extension's own file.
+ */
+export function extensionUrl(href: string): URL {
+  return { protocol: "https:", href, toString: () => href } as unknown as URL;
+}
+
+/**
+ * The C2PA SDK runs in a worker with its WebAssembly, both shipped inside the extension
+ * (Chrome extensions can't load code from elsewhere or start workers from blob: URLs).
+ */
+function sdk(): Promise<C2pa> {
+  c2pa ??= createC2pa({
+    wasmSrc: chrome.runtime.getURL("c2pa/c2pa_bg.wasm"),
+    workerSrc: extensionUrl(chrome.runtime.getURL("c2pa/c2pa_worker.js")),
+  });
+  return c2pa;
+}
+
+/**
+ * Reads Content Credentials from the page's images. Only runs in the deeper check: the
+ * images are fetched again from the sites that served them (usually straight from the
+ * browser cache), without cookies.
+ */
+export async function checkImageCredentials(urls: string[]): Promise<{ creds: ImageCredential[]; checked: number }> {
+  if (!urls.length) return { creds: [], checked: 0 };
+  const c = await sdk();
+  const creds: ImageCredential[] = [];
+  let checked = 0;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: "force-cache", credentials: "omit" });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      if (blob.size > MAX_IMAGE_BYTES || !blob.type.startsWith("image/")) continue;
+      checked++;
+      let store: ManifestStoreLike | null = null;
+      try {
+        const reader = await Reader.fromBlob(c, blob.type, blob);
+        if (reader) {
+          store = (await reader.manifestStore()) as unknown as ManifestStoreLike;
+          await reader.free();
+        }
+      } catch {
+        store = null; // no label, or one the SDK can't read
+      }
+      const cred = readCredential(url, store);
+      if (cred) creds.push(cred);
+    } catch {
+      /* image unavailable: skip */
+    }
+  }
+  return { creds, checked };
+}

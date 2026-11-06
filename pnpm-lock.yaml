@@ -19,6 +19,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@contentauth/c2pa-web':
+        specifier: ~0.15.6
+        version: 0.15.6
       '@satya/checks':
         specifier: workspace:*
         version: link:../../packages/checks
@@ -271,6 +274,18 @@ packages:
   '@babel/types@7.29.11':
     resolution: {integrity: sha512-WCsemW40Cpc6gouC1SrY6PBaZ+oLRlEVY9XBvZBI7il/HyUrb2nJ505wE1MHEFyDZNnrWDEuy4jL50WVHfTTSQ==}
     engines: {node: '>=6.9.0'}
+
+  '@contentauth/c2pa-types@0.7.8':
+    resolution: {integrity: sha512-wqvnS6Ms3FRMUlkBeHorSH4sJXpTx2kB5XcNRnzUcoechTJSoB/cjUVyxExMboN7ujUNPIHcIrtXWTms1A01XA==}
+
+  '@contentauth/c2pa-utilities@0.4.0':
+    resolution: {integrity: sha512-SnYvP1fZS+rKTXiad6Yj0kzOeI4YBhZC2E8zzsx0DPRE/ax02b+HwruphC+sIh5h8jhyw8qkAX/uJPKLarV/LA==}
+
+  '@contentauth/c2pa-wasm@0.13.5':
+    resolution: {integrity: sha512-dq3r2twBs4UCXHy7pQjnf3QUHmjI6YissXqO7l+NkOGWbP5d7ZrcWwBe90PvLRpDza4gkIWye3/tCmpFVTsAZQ==}
+
+  '@contentauth/c2pa-web@0.15.6':
+    resolution: {integrity: sha512-UL6sGpI79+ezPZs7jA1C1qQ1hcu0b6+wnwRN4BPbkaLmpolsRezfRVh8NVygcvF/cWTK/4fYn+blJ1gubLnvsA==}
 
   '@emotion/is-prop-valid@1.4.0':
     resolution: {integrity: sha512-QgD4fyscGcbbKwJmqNvUMSE02OsHUa+lAWKdEUIJKgqe5IwRSKd7+KhibEWdaKwgjLj0DRSHA9biAIqGBk05lw==}
@@ -1498,6 +1513,9 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
+  highgain@0.1.0:
+    resolution: {integrity: sha512-Vw/g2upw4MYLZ9e95k79+idMoPFEKvTQVTce9LCDfI+T6AiG+SdiR4WDKszB1grQy0O+uhxd6cqbdi3VhECdbA==}
+
   hmac-drbg@1.0.1:
     resolution: {integrity: sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg==}
 
@@ -1912,6 +1930,10 @@ packages:
   tryer@1.0.1:
     resolution: {integrity: sha512-c3zayb8/kWWpycWYg87P71E1S1ZL6b6IJxfb5fvsUgsf0S2MVGaDhDXXjDMpdCpfWXqptc+4mXwmiy1ypXqRAA==}
 
+  ts-deepmerge@8.0.0:
+    resolution: {integrity: sha512-133O+10nJmVI8w5xeVZPEv5PIrv7iaUae07wv1aH8XJH95Ur6YIhWAPhPyP1YPlbPS9fCVcNIZTu7m8urRVF0A==}
+    engines: {node: '>=14.13.1'}
+
   tsx@4.23.15:
     resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
@@ -2232,6 +2254,22 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.13
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@contentauth/c2pa-types@0.7.8': {}
+
+  '@contentauth/c2pa-utilities@0.4.0':
+    dependencies:
+      '@contentauth/c2pa-types': 0.7.8
+      ts-deepmerge: 8.0.0
+
+  '@contentauth/c2pa-wasm@0.13.5': {}
+
+  '@contentauth/c2pa-web@0.15.6':
+    dependencies:
+      '@contentauth/c2pa-types': 0.7.8
+      '@contentauth/c2pa-utilities': 0.4.0
+      '@contentauth/c2pa-wasm': 0.13.5
+      highgain: 0.1.0
 
   '@emotion/is-prop-valid@1.4.0':
     dependencies:
@@ -3501,6 +3539,8 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  highgain@0.1.0: {}
+
   hmac-drbg@1.0.1:
     dependencies:
       hash.js: 1.1.7
@@ -3918,6 +3958,8 @@ snapshots:
   toidentifier@1.0.1: {}
 
   tryer@1.0.1: {}
+
+  ts-deepmerge@8.0.0: {}
 
   tsx@4.23.15:
     dependencies:

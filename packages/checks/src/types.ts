@@ -42,6 +42,10 @@ export interface PageSnapshot {
   text: string;
   hasPasswordField?: boolean;
   signals?: PageSignals;
+  /** Main readable text (paragraphs, not menus or footers), for AI-text detection. */
+  mainText?: string;
+  /** Addresses of the larger images on the page, for the Content Credentials check. */
+  images?: string[];
 }
 
 export interface CredibilityResult {

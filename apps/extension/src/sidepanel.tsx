@@ -6,6 +6,8 @@ const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { checkRegistry } from "@satya/registry";
+import { checkImageCredentials } from "./c2pa";
+import { credentialFindings } from "@satya/checks";
 import { BUNDLED_TO_REGISTRY, cachedBucket, detectorFor, getSettings, loadContext, saveSettings, type Settings } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
@@ -97,7 +99,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
 
 function DeeperCheck({ deep, ensNames, onRun }: { deep: boolean; ensNames: number; onRun: () => void }) {
   if (deep) {
-    return <p className="muted privacy">Deeper check done. Domain age, certificates{ensNames ? ", ENS names and proofs" : ""} were looked up for this page only.</p>;
+    return <p className="muted privacy">Deeper check done. Domain age, certificates, image Content Credentials{ensNames ? ", ENS names and proofs" : ""} were looked up for this page only.</p>;
   }
   return (
     <section className="privacy">
@@ -107,7 +109,8 @@ function DeeperCheck({ deep, ensNames, onRun }: { deep: boolean; ensNames: numbe
       <button className="primary" onClick={onRun}>Run deeper check</button>
       <p className="muted">
         This sends the site's domain to <strong>rdap.org</strong> (when it was registered) and <strong>Cert Spotter</strong> (its
-        HTTPS certificates){ensNames ? <>, the {ensNames} ENS name{ensNames > 1 ? "s" : ""} on this page to an Ethereum node (publicnode.com) and their wallet addresses to Arkiv to load proofs</> : null}.
+        HTTPS certificates), re-reads this page's larger images from the sites that served them to look for Content
+        Credentials (signed "made by AI" or "camera photo" labels){ensNames ? <>, the {ensNames} ENS name{ensNames > 1 ? "s" : ""} on this page to an Ethereum node (publicnode.com) and their wallet addresses to Arkiv to load proofs</> : null}.
         Those services can see your IP address.
       </p>
     </section>
@@ -159,11 +162,16 @@ function App() {
           source: "Satya scam registry on Arkiv",
           weight: 0,
         };
-    const [base, identity] = await Promise.all([
+    const [base, identity, images] = await Promise.all([
       analyzePage(page, { ...localCtx, network: deep, aiDetector: deep ? detectorFor(settings) : undefined }),
       deep ? checkIdentity(page, identityDeps).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
+      deep
+        ? checkImageCredentials(page.images ?? [])
+            .then((r) => credentialFindings(r.creds, r.checked))
+            .catch(() => [] as Finding[])
+        : Promise.resolve([] as Finding[]),
     ]);
-    const result = scoreFindings([...base.findings, ...registry.findings, registryNote, ...identity]);
+    const result = scoreFindings([...base.findings, ...registry.findings, registryNote, ...identity, ...images]);
     setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id, deep, ensNames: ensNamesOnPage(page).length });
     await sendToTab(tab.id, {
       type: "highlight",

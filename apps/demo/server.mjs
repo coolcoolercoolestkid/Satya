@@ -10,6 +10,7 @@ const SITES = {
   "metamask-wallet-sync": "seed.html",
   "earn-daily-tasks": "tasks.html",
   "pm-kisan-help": "gov.html",
+  "photo-proof": "images.html",
 };
 
 const BANNER = `<div role="alert" style="position:sticky;top:0;z-index:2147483647;background:#b00020;color:#fff;font:800 28px/1.2 system-ui,sans-serif;padding:18px 16px;text-align:center;letter-spacing:.5px;border-bottom:6px solid #ffd400">
@@ -25,6 +26,17 @@ createServer(async (req, res) => {
     return;
   }
   const host = (req.headers.host ?? "").split(":")[0];
+  // Sample images for the Content Credentials demo (official C2PA test files).
+  const img = /^\/img\/([\w.-]+\.jpg)$/.exec(req.url ?? "");
+  if (img) {
+    try {
+      const bytes = await readFile(new URL(`./pages/img/${img[1]}`, import.meta.url));
+      res.writeHead(200, { "content-type": "image/jpeg" }).end(bytes);
+    } catch {
+      res.writeHead(404).end();
+    }
+    return;
+  }
   const name = host.replace(/\.localhost$/, "");
   const file = SITES[name] ?? (host === "localhost" || host === "127.0.0.1" ? "index.html" : null);
   if (!file || req.url?.startsWith("/favicon")) {

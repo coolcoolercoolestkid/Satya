@@ -16,8 +16,8 @@ export interface AiDetector {
   detect(text: string): Promise<AiDetection>;
 }
 
-/** Keep requests small: detectors bill per word, and a page sample is enough. */
-export const MAX_AI_CHARS = 5000;
+/** Up to this much of the page's main text is sent (detectors bill per word, with your key). */
+export const MAX_AI_CHARS = 20000;
 const MIN_AI_CHARS = 300;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -115,13 +115,13 @@ export function aiFindings(d: AiDetection): Finding[] {
       {
         check: "ai",
         severity: "warning",
-        title: `Likely AI-generated text (${pct}%)`,
+        title: `${pct}% of this page's text looks AI-written`,
         detail: "AI detectors can be wrong, so treat this as a signal, not proof.",
         source,
         weight: 10,
       },
     ];
-    for (const seg of d.aiSegments.slice(0, 3)) {
+    for (const seg of d.aiSegments.slice(0, 10)) {
       findings.push({
         check: "ai",
         severity: "info",
@@ -137,7 +137,7 @@ export function aiFindings(d: AiDetection): Finding[] {
     return [{
       check: "ai",
       severity: "info",
-      title: `Some text may be AI-assisted (${pct}%)`,
+      title: `${pct}% of this page's text may be AI-assisted`,
       detail: "AI detectors can be wrong, so treat this as a signal, not proof.",
       source,
       weight: 0,
@@ -146,7 +146,8 @@ export function aiFindings(d: AiDetection): Finding[] {
   return [{
     check: "ai",
     severity: "good",
-    title: "Text reads as human-written",
+    title: `${pct}% of this page's text looks AI-written`,
+    detail: "The rest reads as human-written. AI detectors can be wrong, so treat this as a signal, not proof.",
     source,
     weight: 0,
   }];
@@ -156,7 +157,16 @@ export function aiFindings(d: AiDetection): Finding[] {
 export async function checkAiContent(text: string, detector?: AiDetector): Promise<Finding[]> {
   if (!detector) return [];
   const sample = text.replace(/\s+/g, " ").trim();
-  if (sample.length < MIN_AI_CHARS) return [];
+  if (sample.length < MIN_AI_CHARS) {
+    return [{
+      check: "ai",
+      severity: "info",
+      title: "Not enough text to judge if it's AI-written",
+      detail: `The page has under ${MIN_AI_CHARS} characters of main text, too little for a reliable answer.`,
+      source: `${detector.name} AI detector`,
+      weight: 0,
+    }];
+  }
   try {
     return aiFindings(await detector.detect(sample));
   } catch (err) {

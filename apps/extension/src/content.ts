@@ -69,6 +69,31 @@ function signals() {
   };
 }
 
+/** Paragraph text from the page's main content, skipping menus, headers and footers. */
+function mainText(): string {
+  const root = document.querySelector("main, article, [role=main]") ?? document.body;
+  if (!root) return "";
+  const parts: string[] = [];
+  for (const el of root.querySelectorAll<HTMLElement>("p, li, blockquote, h1, h2, h3, td")) {
+    if (el.closest("nav, header, footer, aside, script, style, noscript, [aria-hidden=true]")) continue;
+    const t = el.innerText?.replace(/\s+/g, " ").trim() ?? "";
+    if (t.length >= 40 && !parts.includes(t)) parts.push(t);
+  }
+  return parts.join("\n").slice(0, 20000);
+}
+
+/** The larger images actually shown on the page (icons and tracking pixels skipped). */
+function images(): string[] {
+  const out = new Set<string>();
+  for (const img of document.images) {
+    const src = img.currentSrc || img.src;
+    if (!/^https?:/.test(src) || img.naturalWidth < 150 || img.naturalHeight < 150) continue;
+    out.add(src);
+    if (out.size >= 8) break;
+  }
+  return [...out];
+}
+
 function snapshot() {
   const text = (document.body?.innerText ?? "").slice(0, MAX_TEXT);
   return {
@@ -77,6 +102,8 @@ function snapshot() {
     text,
     hasPasswordField: !!document.querySelector('input[type="password"]'),
     signals: signals(),
+    mainText: mainText(),
+    images: images(),
   };
 }
 

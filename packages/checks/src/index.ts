@@ -45,10 +45,11 @@ export async function analyzePage(page: PageSnapshot, ctx: AnalyzeContext): Prom
   const [age, certs, ai] = await Promise.all([
     network ? lookupDomainAge(page.url, ctx.fetchImpl) : Promise.resolve(undefined),
     network ? lookupCertificates(page.url, ctx.fetchImpl) : Promise.resolve([]),
-    checkAiContent(page.text, ctx.aiDetector),
+    checkAiContent(page.mainText || page.text, ctx.aiDetector),
   ]);
   if (age) findings.push(age);
   findings.push(...certs, ...ai);
 
   return scoreFindings(findings);
 }
+export * from "./credentials.js";
