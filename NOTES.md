@@ -66,8 +66,8 @@ people prove facts about themselves (18+, nationality, ID valid) without showing
 
 ## Remotes
 
-- `origin` → github.com/thecherrycoder-dev/Satya (private; temporary, made by mistake from the wrong account; don't push here).
-- `coolcoolercoolestkid` → github.com/coolcoolercoolestkid/Satya (empty; needs that account to push). ETHGlobal needs a **public** repo at submission time.
+- `origin` → github.com/coolcoolercoolestkid/Satya (public). Push only with gh logged in as coolcoolercoolestkid (`gh auth switch -u coolcoolercoolestkid`).
+- github.com/thecherrycoder-dev/Satya was a temporary private copy from the wrong account; don't push there.
 
 ## Gotchas
 
