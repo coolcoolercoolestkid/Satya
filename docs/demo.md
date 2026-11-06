@@ -7,9 +7,12 @@
 2. Reload Satya in `chrome://extensions` so it runs the latest build, then open the side panel.
 3. Have MetaMask on **Arkiv Rabdi testnet** with a little tGLM, connected to the web app.
 4. Have a terminal with the `curl` query from the README ready.
-5. The Aadhaar proof takes minutes to generate, so make it **before** recording (Aadhaar tab →
-   Test card · adult → Generate proof in browser, or the Node script), and check the test card
-   was signed in the last 3 days.
+5. The demo wallet is the publisher wallet `0x0D34…E736` (imported into MetaMask). A real TEST
+   proof for it is already made (`apps/web/public/test-aadhaar/proof-0x0d34….json`), so in the
+   Aadhaar tab use **Use pre-made proof**; it is verified again in the browser. One copy is
+   already on Arkiv (record `0x2bc7745c…`). The test card was signed on 6 Nov 2026 11:00 IST, so
+   the 3-day rule accepts it until 9 Nov; after that, re-sign the cards with
+   `node scripts/import/make-test-aadhaar.mjs` and make a new proof.
 
 ## Script (about 2 minutes)
 
