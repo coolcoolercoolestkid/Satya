@@ -5,7 +5,7 @@ declare const __ARKIV_ACCESS_KEY__: string;
 const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { detectorFor, getSettings, loadContext, saveSettings, type Settings } from "./data";
+import { detectorFor, getSettings, reviewerFor, loadContext, saveSettings, type Settings } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
 const ICON: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "i", good: "✓" };
@@ -14,6 +14,7 @@ const CHECK_NAMES: Record<Finding["check"], string> = {
   page: "What is it asking for?",
   records: "Past records",
   scam: "What is it saying?",
+  review: "AI review",
   ai: "Possibly AI",
   identity: "Who is this?",
 };
@@ -67,16 +68,21 @@ function FindingRow({ f, tabId }: { f: Finding; tabId: number }) {
 }
 
 function SettingsPanel({ onSaved }: { onSaved: () => void }) {
-  const [s, setS] = useState<Settings>({ detector: "none", apiKey: "" });
+  const [s, setS] = useState<Settings>({ detector: "none", apiKey: "", claudeKey: "" });
   useEffect(() => void getSettings().then(setS), []);
   return (
     <details className="settings">
-      <summary>AI detector settings</summary>
+      <summary>AI settings</summary>
       <p className="muted">
-        Optional. Page text is sent to the detector you pick, using your own API key. Off by default.
+        Optional, off by default. When on, page text is sent to the service you pick, using your own API key.
       </p>
       <label>
-        Detector
+        AI page review (Claude API key)
+        <input type="password" value={s.claudeKey} onChange={(e) => setS({ ...s, claudeKey: e.target.value })} placeholder="sk-ant-… stored only in this browser" />
+      </label>
+      <p className="muted">Claude reads the page for scam signs the rules miss. Every sign must quote the page, and it can only warn, never vouch.</p>
+      <label>
+        AI-written text detector
         <select value={s.detector} onChange={(e) => setS({ ...s, detector: e.target.value as Settings["detector"] })}>
           <option value="none">Off</option>
           <option value="pangram">Pangram</option>
@@ -84,7 +90,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
         </select>
       </label>
       <label>
-        API key
+        Detector API key
         <input type="password" value={s.apiKey} onChange={(e) => setS({ ...s, apiKey: e.target.value })} placeholder="Stored only in this browser" />
       </label>
       <button className="primary" onClick={async () => { await saveSettings(s); onSaved(); }}>Save and re-check</button>
@@ -109,7 +115,7 @@ function App() {
     }
     const [ctx, settings] = await Promise.all([loadContext(), getSettings()]);
     const [base, identity] = await Promise.all([
-      analyzePage(page, { ...ctx, aiDetector: detectorFor(settings) }),
+      analyzePage(page, { ...ctx, aiDetector: detectorFor(settings), reviewer: reviewerFor(settings) }),
       checkIdentity(page, identityDeps).catch(() => [] as Finding[]),
     ]);
     const result = scoreFindings([...base.findings, ...identity]);

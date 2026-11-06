@@ -1,4 +1,5 @@
 import {
+  claudeReviewer,
   gptZeroDetector,
   pangramDetector,
   SEED_BRANDS,
@@ -6,6 +7,7 @@ import {
   type AiDetector,
   type AnalyzeContext,
   type DomainList,
+  type PageReviewer,
 } from "@satya/checks";
 
 interface DomainListFile {
@@ -68,11 +70,17 @@ export type DetectorChoice = "none" | "pangram" | "gptzero";
 export interface Settings {
   detector: DetectorChoice;
   apiKey: string;
+  /** Anthropic API key for the AI page review. Empty = review off. */
+  claudeKey: string;
 }
 
 export async function getSettings(): Promise<Settings> {
-  const s = await chrome.storage.local.get(["detector", "apiKey"]);
-  return { detector: (s.detector as DetectorChoice) ?? "none", apiKey: (s.apiKey as string) ?? "" };
+  const s = await chrome.storage.local.get(["detector", "apiKey", "claudeKey"]);
+  return {
+    detector: (s.detector as DetectorChoice) ?? "none",
+    apiKey: (s.apiKey as string) ?? "",
+    claudeKey: (s.claudeKey as string) ?? "",
+  };
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
@@ -84,4 +92,8 @@ export function detectorFor(s: Settings): AiDetector | undefined {
   if (s.detector === "pangram") return pangramDetector(s.apiKey);
   if (s.detector === "gptzero") return gptZeroDetector(s.apiKey);
   return undefined;
+}
+
+export function reviewerFor(s: Settings): PageReviewer | undefined {
+  return s.claudeKey ? claudeReviewer(s.claudeKey, { browser: true }) : undefined;
 }
