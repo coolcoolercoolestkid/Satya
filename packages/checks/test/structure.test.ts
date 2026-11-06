@@ -116,6 +116,6 @@ describe("privacy by default", () => {
     await analyzePage(p, { phishing: { brands: SEED_BRANDS, lists: [] }, network: false, fetchImpl: spy });
     expect(calls).toEqual([]);
     await analyzePage(p, { phishing: { brands: SEED_BRANDS, lists: [] }, network: true, fetchImpl: spy });
-    expect(calls.map((u) => new URL(u).hostname).sort()).toEqual(["api.certspotter.com", "archive.org", "rdap.org"]);
+    expect(calls.map((u) => new URL(u).hostname).sort()).toEqual(["api.certspotter.com", "archive.org", "data.iana.org", "rdap.org"]);
   });
 });
