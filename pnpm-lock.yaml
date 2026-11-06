@@ -17,6 +17,9 @@ importers:
       '@satya/checks':
         specifier: workspace:*
         version: link:../../packages/checks
+      '@satya/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       react:
         specifier: ^18.3.1
         version: 18.3.1

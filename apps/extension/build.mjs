@@ -21,6 +21,8 @@ const options = {
   minify: !watch,
   sourcemap: watch ? "inline" : false,
   logLevel: "info",
+  // Arkiv RPC access key: not a secret, restrict it to the extension at hub.arkiv.network/access-keys.
+  define: { __ARKIV_ACCESS_KEY__: JSON.stringify(process.env.ARKIV_ACCESS_KEY ?? "") },
 };
 
 if (watch) {

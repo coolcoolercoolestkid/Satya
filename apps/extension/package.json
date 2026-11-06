@@ -11,7 +11,8 @@
   "dependencies": {
     "@satya/checks": "workspace:*",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@satya/identity": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

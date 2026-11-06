@@ -1,4 +1,8 @@
-import { analyzePage, type CredibilityResult, type Finding } from "@satya/checks";
+import { analyzePage, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
+import { checkIdentity, defaultIdentityDeps } from "@satya/identity";
+
+declare const __ARKIV_ACCESS_KEY__: string;
+const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { detectorFor, getSettings, loadContext, saveSettings, type Settings } from "./data";
@@ -103,12 +107,22 @@ function App() {
       return;
     }
     const [ctx, settings] = await Promise.all([loadContext(), getSettings()]);
-    const result = await analyzePage(page, { ...ctx, aiDetector: detectorFor(settings) });
+    const [base, identity] = await Promise.all([
+      analyzePage(page, { ...ctx, aiDetector: detectorFor(settings) }),
+      checkIdentity(page, identityDeps).catch(() => [] as Finding[]),
+    ]);
+    const result = scoreFindings([...base.findings, ...identity]);
     setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id });
     await sendToTab(tab.id, {
       type: "highlight",
       items: result.findings
-        .filter((f) => f.evidence && f.check !== "phishing" && f.severity !== "good")
+        .filter(
+          (f) =>
+            f.evidence &&
+            f.check !== "phishing" &&
+            f.severity !== "good" &&
+            !(f.check === "identity" && f.severity === "info"),
+        )
         .map((f) => ({ evidence: f.evidence!, severity: f.severity, title: f.title })),
     });
   }, []);
