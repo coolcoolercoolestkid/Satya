@@ -1,0 +1,25 @@
+{
+  "name": "@satya/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Satya as an MCP server: lets AI agents check a link, message or wallet before they act on it.",
+  "bin": {
+    "satya-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/server.js --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@satya/checks": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.9.3"
+  }
+}

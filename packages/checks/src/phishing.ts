@@ -98,7 +98,9 @@ export function checkPhishing(page: PageSnapshot, ctx: PhishingContext): Finding
   for (const brand of ctx.brands) {
     for (const domain of brand.officialDomains) {
       const brandLabel = domainLabel(domain);
-      if (brandLabel.length < 4) continue;
+      if (brandLabel.length < 3) continue;
+      // Short names ("sbi") only count as a whole hyphen-separated word: "sbi-kyc-update".
+      if (brandLabel.length < 4 && !(labelTokens.length > 1 && labelTokens.includes(brandLabel))) continue;
       const brandSkeleton = skeleton(brandLabel);
       const distance = levenshtein(label, brandLabel);
       // Same name on another TLD: "metamask.app" when the real one is "metamask.io".

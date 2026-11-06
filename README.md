@@ -23,6 +23,10 @@ Built at **ETHGlobal Mumbai 2026**. Design and build plan: [ARCHITECTURE.md](ARC
 | Check engine: scam promises (incl. India-specific patterns) | ✅ |
 | Check engine: past records (domain age via RDAP, sanctioned wallets) | ✅ |
 | Check engine: possibly AI (Pangram or GPTZero, your own key) | ✅ |
+| Check engine: page structure (OTP/UPI PIN/seed fields, forms to other sites, APKs), gov/bank domains, certificate type | ✅ |
+| AI page review (Claude, your own key): may only add warnings that quote the page | ✅ (tested with a stand-in model) |
+| MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
+| zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design](docs/zktls.md) |
 | Browser extension side panel + on-page highlights | ✅ |
 | Identity: mock DigiLocker issuer, one signed claim per fact (18+, nationality, ID valid) | ✅ |
 | Arkiv: proof records owned by the holder, expiring with the credential | ✅ |
