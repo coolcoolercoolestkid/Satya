@@ -1,0 +1,9 @@
+{
+  "name": "@satya/import",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "data": "node build-data.mjs"
+  }
+}

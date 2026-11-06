@@ -1,0 +1,17 @@
+{
+  "source": "RBI Alert List of unauthorised forex trading platforms",
+  "sourceUrl": "https://www.rbi.org.in/",
+  "note": "Partial list. Names below come from RBI's press release of 19 Nov 2025 (release 2025-2026/1530) and widely reported earlier entries. TODO: complete from RBI's official Alert List before submission.",
+  "names": [
+    "Starnet FX",
+    "CapPlace",
+    "Mirrox",
+    "Fusion Markets",
+    "Trive",
+    "NXG Markets",
+    "Nord FX",
+    "OctaFX",
+    "eToro",
+    "Forex.com"
+  ]
+}

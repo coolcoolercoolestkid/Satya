@@ -5,6 +5,7 @@ const watch = process.argv.includes("--watch");
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist", { recursive: true });
 cpSync("public", "dist", { recursive: true });
+mkdirSync("data", { recursive: true }); // run `pnpm data` first to download the public lists
 cpSync("data", "dist/data", { recursive: true });
 
 const options = {

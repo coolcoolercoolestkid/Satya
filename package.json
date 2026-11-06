@@ -4,6 +4,7 @@
   "description": "Satya: a browser extension that shows whether a website or person is real, with reasons and proofs.",
   "license": "MIT",
   "scripts": {
+    "data": "pnpm --filter @satya/import data",
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck"

@@ -19,13 +19,27 @@ Built at **ETHGlobal Mumbai 2026**. Design and build plan: [ARCHITECTURE.md](ARC
 
 | Part | Status |
 |---|---|
-| Check engine: phishing / clone | 🚧 |
-| Check engine: scam promises | 🚧 |
-| Check engine: past records (domain age) | 🚧 |
-| Check engine: possibly AI | 🚧 |
-| Browser extension side panel | 🚧 |
+| Check engine: phishing / lookalike domains | ✅ |
+| Check engine: scam promises (incl. India-specific patterns) | ✅ |
+| Check engine: past records (domain age via RDAP, sanctioned wallets) | ✅ |
+| Check engine: possibly AI (Pangram or GPTZero, your own key) | ✅ |
+| Browser extension side panel + on-page highlights | ✅ |
 | Identity proofs (Anon Aadhaar, mock DigiLocker) | ⏳ |
 | Arkiv records, ENS lookups | ⏳ |
+
+## Public data used
+
+Every flag shows its source. Satya only uses information that is already public.
+
+| List | Source | License |
+|---|---|---|
+| ~115,000 phishing domains | [MetaMask eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect) | DBAD |
+| Sanctioned Ethereum addresses | US Treasury OFAC SDN list, extracted by [0xB10C/ofac-sanctioned-digital-currency-addresses](https://github.com/0xB10C/ofac-sanctioned-digital-currency-addresses) | Public domain / MIT |
+| Unauthorised forex platforms | RBI Alert List (partial, curated in `scripts/import/rbi-alert-list.json`) | Public government notice |
+| Domain registration dates | [RDAP](https://rdap.org) | Public registry data |
+
+For real people, Satya only shows proofs they created or public lists they appear on. It
+never labels a real person on its own judgment.
 
 ## Run it
 
@@ -33,6 +47,7 @@ Requires Node ≥ 22 and pnpm.
 
 ```bash
 pnpm install
+pnpm data    # download the public lists
 pnpm test
 pnpm build
 ```
