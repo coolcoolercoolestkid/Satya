@@ -35,15 +35,34 @@ function sdk(): Promise<C2pa> {
  * images are fetched again from the sites that served them (usually straight from the
  * browser cache), without cookies.
  */
-export async function checkImageCredentials(urls: string[]): Promise<{ creds: ImageCredential[]; checked: number }> {
-  if (!urls.length) return { creds: [], checked: 0 };
-  const c = await sdk();
+export interface ImageCheck {
+  creds: ImageCredential[];
+  /** Images found on the page. */
+  found: number;
+  /** Images actually read. */
+  checked: number;
+  errors: string[];
+}
+
+export async function checkImageCredentials(urls: string[]): Promise<ImageCheck> {
+  if (!urls.length) return { creds: [], found: 0, checked: 0, errors: [] };
+  const errors: string[] = [];
+  let c: C2pa;
+  try {
+    c = await sdk();
+  } catch (e) {
+    c2pa = undefined;
+    return { creds: [], found: urls.length, checked: 0, errors: [`C2PA reader failed to start: ${e instanceof Error ? e.message : String(e)}`] };
+  }
   const creds: ImageCredential[] = [];
   let checked = 0;
   for (const url of urls) {
     try {
       const res = await fetch(url, { cache: "force-cache", credentials: "omit" });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        errors.push(`${url.split("/").pop()}: HTTP ${res.status}`);
+        continue;
+      }
       const blob = await res.blob();
       if (blob.size > MAX_IMAGE_BYTES || !blob.type.startsWith("image/")) continue;
       checked++;
@@ -59,9 +78,9 @@ export async function checkImageCredentials(urls: string[]): Promise<{ creds: Im
       }
       const cred = readCredential(url, store);
       if (cred) creds.push(cred);
-    } catch {
-      /* image unavailable: skip */
+    } catch (e) {
+      errors.push(`${url.split("/").pop()}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return { creds, checked };
+  return { creds, found: urls.length, checked, errors };
 }

@@ -43,6 +43,7 @@ const options = {
   define: {
     __ARKIV_ACCESS_KEY__: JSON.stringify(process.env.ARKIV_ACCESS_KEY ?? ""),
     __SATYA_WEB_URL__: JSON.stringify(process.env.SATYA_WEB_URL ?? "http://localhost:5173"),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC"),
   },
 };
 

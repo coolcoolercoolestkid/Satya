@@ -1,6 +1,6 @@
 import type { Finding, PageSnapshot } from "@satya/checks";
 import { normalizeHost } from "@satya/checks/src/domain.js";
-import { bucketOf, domainCandidates, matchInRecords, type BucketRecord } from "./index.js";
+import { bucketOf, domainCandidates, matchInRecords, SOURCES, siteOf, type BucketRecord } from "./index.js";
 
 /** Satya's registry publisher on Arkiv. Only records owned by this wallet are trusted. */
 export const SATYA_PUBLISHER = "0x0D341d00bB9c2327033f447b45Ebb8712521E736" as const;
@@ -22,6 +22,16 @@ export interface RegistryResult {
    * needed had a record from it. For other sources the caller keeps using its bundled copy.
    */
   covered: { domain: string[]; address: string[] };
+  /** What was looked up and which Arkiv records answered, so the panel can show the proof. */
+  lookups: RegistryLookup[];
+}
+
+export interface RegistryLookup {
+  kind: "domain" | "address";
+  /** The value that was hashed on this computer (never sent). */
+  value: string;
+  bucket: string;
+  records: { source: string; label: string; key: string; date: string; entries: number; matched: boolean }[];
 }
 
 const intersect = (sets: Set<string>[]) =>
@@ -39,6 +49,7 @@ const via = (r: BucketRecord, label: string) =>
 export async function checkRegistry(page: PageSnapshot, fetchBucket: BucketFetcher): Promise<RegistryResult> {
   const findings: Finding[] = [];
   const asked = new Set<string>();
+  const lookups: RegistryLookup[] = [];
   const domainSources: Set<string>[] = [];
   const addressSources: Set<string>[] = [];
   const sourcesOf = (records: BucketRecord[], type: BucketRecord["type"]) =>
@@ -52,7 +63,9 @@ export async function checkRegistry(page: PageSnapshot, fetchBucket: BucketFetch
       asked.add(bucket);
       const records = await fetchBucket(bucket);
       domainSources.push(sourcesOf(records, "domain"));
-      for (const hit of await matchInRecords("domain", domainCandidates(host), records)) {
+      const domainHits = await matchInRecords("domain", domainCandidates(host), records);
+      lookups.push(lookupOf("domain", siteOf(host), bucket, records, domainHits.map((h) => h.record.key)));
+      for (const hit of domainHits) {
         const m = hit.source.match ?? { severity: "danger" as const, weight: 70, title: "Known phishing site" };
         findings.push({
           check: "phishing",
@@ -69,7 +82,9 @@ export async function checkRegistry(page: PageSnapshot, fetchBucket: BucketFetch
       asked.add(bucket);
       const records = await fetchBucket(bucket);
       addressSources.push(sourcesOf(records, "address"));
-      for (const hit of await matchInRecords("address", [address], records)) {
+      const addressHits = await matchInRecords("address", [address], records);
+      lookups.push(lookupOf("address", address, bucket, records, addressHits.map((h) => h.record.key)));
+      for (const hit of addressHits) {
         findings.push({
           check: "records",
           severity: "danger",
@@ -82,8 +97,26 @@ export async function checkRegistry(page: PageSnapshot, fetchBucket: BucketFetch
       }
     }
     const covered = { domain: intersect(domainSources), address: addresses.length ? intersect(addressSources) : ["*"] };
-    return { findings, reachable: true, bucketsAsked: [...asked], covered };
+    return { findings, reachable: true, bucketsAsked: [...asked], covered, lookups };
   } catch {
-    return { findings: [], reachable: false, bucketsAsked: [...asked], covered: { domain: [], address: [] } };
+    return { findings: [], reachable: false, bucketsAsked: [...asked], covered: { domain: [], address: [] }, lookups };
   }
+}
+
+function lookupOf(kind: "domain" | "address", value: string, bucket: string, records: BucketRecord[], hitKeys: string[]): RegistryLookup {
+  return {
+    kind,
+    value,
+    bucket,
+    records: records
+      .filter((r) => r.type === kind)
+      .map((r) => ({
+        source: r.source,
+        label: SOURCES[r.source]?.label ?? r.source,
+        key: r.key,
+        date: r.date,
+        entries: r.hashes.size,
+        matched: hitKeys.includes(r.key),
+      })),
+  };
 }

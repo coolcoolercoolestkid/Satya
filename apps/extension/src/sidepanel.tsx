@@ -1,24 +1,39 @@
-import { analyzePage, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
+import { analyzePage, buildEvidence, credentialFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
 import { checkIdentity, defaultIdentityDeps, ensNamesOnPage } from "@satya/identity";
-
-declare const __ARKIV_ACCESS_KEY__: string;
-const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
+import { checkRegistry, type RegistryResult } from "@satya/registry";
 import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { checkRegistry } from "@satya/registry";
-import { checkImageCredentials } from "./c2pa";
-import { buildEvidence, credentialFindings } from "@satya/checks";
+import { checkImageCredentials, type ImageCheck } from "./c2pa";
 import { BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
-const ICON: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "i", good: "✓" };
-const CHECK_NAMES: Record<Finding["check"], string> = {
-  phishing: "Is this site real?",
-  page: "What is it asking for?",
-  records: "Past records",
-  scam: "What is it saying?",
-  ai: "AI content (not part of the score)",
-  identity: "Who is this?",
+declare const __ARKIV_ACCESS_KEY__: string;
+declare const __SATYA_WEB_URL__: string;
+declare const __BUILD_TIME__: string;
+
+const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
+const EXPLORER = "https://rabdi.explorer.arkiv.network";
+
+const GROUPS: [Finding["check"], string][] = [
+  ["phishing", "Is this site real?"],
+  ["page", "What is it asking for?"],
+  ["scam", "What is it saying?"],
+  ["records", "Past records"],
+  ["identity", "Who is this?"],
+  ["ai", "AI content · not part of the score"],
+];
+const GLYPH: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "·", good: "✓" };
+const STAMP: Record<CredibilityResult["level"], string> = {
+  trustworthy: "Verified",
+  unverified: "No red flags",
+  careful: "Caution",
+  "high-risk": "Flagged",
+};
+const MEANING: Record<CredibilityResult["level"], string> = {
+  trustworthy: "Something independent vouches for this site, and nothing wrong was found.",
+  unverified: "Nothing wrong was found, but nothing proves this site is legitimate either.",
+  careful: "Some warning signs. Don't enter passwords, OTPs or card details without checking.",
+  "high-risk": "Strong signs of a scam. Don't pay, log in or type anything here.",
 };
 
 async function activeTab() {
@@ -34,115 +49,218 @@ async function sendToTab<T>(tabId: number, msg: ContentRequest): Promise<T | und
   }
 }
 
-type State =
-  | { status: "loading" }
-  | { status: "unsupported"; url?: string }
-  | { status: "done"; host: string; result: CredibilityResult; tabId: number; deep: boolean; ensNames: number; page: SnapshotResponse; windowId: number };
+interface Done {
+  status: "done";
+  host: string;
+  result: CredibilityResult;
+  tabId: number;
+  windowId: number;
+  deep: boolean;
+  ensNames: number;
+  page: SnapshotResponse;
+  registry: RegistryResult;
+  images?: ImageCheck;
+  checkedAt: Date;
+}
+type State = { status: "loading" } | { status: "unsupported"; url?: string } | Done;
 
-function ScoreRing({ score, level }: { score: number; level: CredibilityResult["level"] }) {
-  const r = 34;
-  const c = 2 * Math.PI * r;
+const short = (h: string, n = 6) => (h.length > 2 * n + 2 ? `${h.slice(0, n + 2)}…${h.slice(-n)}` : h);
+
+function Seal({ result }: { result: CredibilityResult }) {
   return (
-    <svg className={`ring ${level}`} width="88" height="88" viewBox="0 0 88 88" aria-label={`Score ${score} out of 100`}>
-      <circle cx="44" cy="44" r={r} className="ring-bg" />
-      <circle cx="44" cy="44" r={r} className="ring-fg" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
-      <text x="44" y="50" textAnchor="middle" className="ring-text">{score}</text>
-    </svg>
+    <div className={`seal ${result.level}`} aria-label={`Score ${result.score} out of 100`}>
+      <div>
+        <div className="seal-score">{result.score}</div>
+        <div className="seal-of">of 100</div>
+      </div>
+    </div>
   );
 }
 
-function FindingRow({ f, tabId }: { f: Finding; tabId: number }) {
+function Line({ f, tabId }: { f: Finding; tabId: number }) {
   return (
-    <li className={`finding ${f.severity}`}>
-      <span className="badge" aria-hidden>{ICON[f.severity]}</span>
-      <div className="body">
-        <div className="title">{f.title}</div>
-        {f.detail && <div className="detail">{f.detail}</div>}
+    <li className={`line ${f.severity}`}>
+      <span className="glyph" aria-hidden>{GLYPH[f.severity]}</span>
+      <div className="line-body">
+        <div className="line-title">{f.title}</div>
+        {f.detail && <div className="line-detail">{f.detail}</div>}
         {f.evidence && (
-          <button className="evidence" onClick={() => sendToTab(tabId, { type: "scrollTo", evidence: f.evidence! })}>
+          <button className="quote" onClick={() => sendToTab(tabId, { type: "scrollTo", evidence: f.evidence! })} title="Show on the page">
             “{f.evidence.length > 140 ? `${f.evidence.slice(0, 140)}…` : f.evidence}”
           </button>
         )}
-        <div className="source">Source: {f.source}</div>
+        <div className="line-source">src · {f.source}</div>
       </div>
+      {f.weight > 0 && f.check !== "ai" && <span className="points">−{f.weight}</span>}
     </li>
   );
 }
 
-function DeeperCheck({ deep, ensNames, onRun }: { deep: boolean; ensNames: number; onRun: () => void }) {
-  if (deep) {
-    return (
-      <p className="muted privacy">
-        Deeper check done. Domain age, certificates, image Content Credentials{ensNames ? ", ENS names and proofs" : ""} were
-        looked up for this page only. AI-written <em>text</em> isn't scored: no detector that runs without an outside account is
-        reliable enough to show a percentage.
-      </p>
-    );
-  }
+/** The part that shows the work: what was hashed, what Arkiv was asked, which records answered. */
+function Proof({ s }: { s: Done }) {
   return (
-    <section className="privacy">
-      <p className="muted">
-        <strong>Private by default.</strong> So far Satya sent nothing about this page except one bucket id to Arkiv.
-      </p>
-      <button className="primary" onClick={onRun}>Run deeper check</button>
-      <p className="muted">
-        This sends the site's domain to <strong>rdap.org</strong> (when it was registered) and <strong>Cert Spotter</strong> (its
-        HTTPS certificates), re-reads this page's larger images from the sites that served them to look for Content
-        Credentials (signed "made by AI" or "camera photo" labels){ensNames ? <>, the {ensNames} ENS name{ensNames > 1 ? "s" : ""} on this page to an Ethereum node (publicnode.com) and their wallet addresses to Arkiv to load proofs</> : null}.
+    <section className="proof">
+      <div className="eyebrow">How this was verified</div>
+      {s.registry.reachable ? (
+        s.registry.lookups.map((l) => (
+          <div key={l.kind + l.value} className="proof-block">
+            <div className="hash">
+              sha256(<b>{l.value}</b>) → bucket <b>{l.bucket}</b>
+            </div>
+            <div className="proof-note">
+              Only “{l.bucket}” was sent to Arkiv. The {l.kind === "domain" ? "site" : "wallet"} itself never left this computer.
+            </div>
+            <ul className="records">
+              {l.records.map((r) => (
+                <li key={r.key} className={r.matched ? "hit" : ""}>
+                  <span className="rec-mark">{r.matched ? "MATCH" : "clear"}</span>
+                  <span className="rec-label">{r.label}</span>
+                  <span className="rec-meta">
+                    {r.entries.toLocaleString()} hashed entries · {r.date} ·{" "}
+                    <a href={`${EXPLORER}/entity/${r.key}`} target="_blank" rel="noreferrer">record {short(r.key, 4)} ↗</a>
+                  </span>
+                </li>
+              ))}
+              {!l.records.length && <li className="rec-meta">No registry records for this bucket.</li>}
+            </ul>
+          </div>
+        ))
+      ) : (
+        <div className="proof-note">Arkiv couldn't be reached, so the copy of the lists bundled with Satya was used instead.</div>
+      )}
+      <div className="proof-block">
+        <div className="proof-note">
+          <b>On this computer:</b> lookalike domains, scam wording, risky forms (OTP, UPI PIN, card, seed phrase), gov/bank
+          domain rules.
+        </div>
+        {s.deep ? (
+          <div className="proof-note">
+            <b>Deeper check:</b> domain age from rdap.org, certificates from Cert Spotter
+            {s.ensNames ? ", ENS names and proofs from Ethereum and Arkiv" : ""}.{" "}
+            {s.images && (
+              <>
+                Images: {s.images.found} found, {s.images.checked} read, {s.images.creds.length} with Content Credentials.
+                {s.images.found === 0 && " (If this page has large images, reload the page so Satya's page reader updates.)"}
+              </>
+            )}
+            {s.images?.errors.map((e) => (
+              <div key={e} className="proof-error">⚠ {e}</div>
+            ))}
+          </div>
+        ) : (
+          <div className="proof-note"><b>Not run yet:</b> domain age, certificates, image Content Credentials, ENS proofs.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DeeperCheck({ ensNames, onRun }: { ensNames: number; onRun: () => void }) {
+  return (
+    <section className="action">
+      <button className="btn" onClick={onRun}>Run deeper check</button>
+      <p className="fine">
+        Sends the site's domain to rdap.org (age) and Cert Spotter (certificates), re-reads this page's larger images from
+        the sites that served them to read Content Credentials
+        {ensNames ? `, and the ${ensNames} ENS name${ensNames > 1 ? "s" : ""} on this page to an Ethereum node and Arkiv` : ""}.
         Those services can see your IP address.
       </p>
     </section>
   );
 }
 
-declare const __SATYA_WEB_URL__: string;
-
 /**
  * Freezes the page as evidence: its text, a screenshot and Satya's findings go into a file the
  * user keeps. Only the file's fingerprint (a SHA-256 hash) is anchored on Arkiv, from the web
  * app with the user's own wallet, so nobody learns which page it was.
  */
-function SaveEvidence({ page, result, windowId }: { page: SnapshotResponse; result: CredibilityResult; windowId: number }) {
+function SaveEvidence({ s }: { s: Done }) {
   const [saved, setSaved] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
   const save = async () => {
     setBusy(true);
+    setError(undefined);
     try {
-      const screenshot = await chrome.tabs.captureVisibleTab(windowId, { format: "png" }).catch(() => null);
+      const screenshot = await chrome.tabs.captureVisibleTab(s.windowId, { format: "png" }).catch(() => null);
       const ev = await buildEvidence({
-        url: page.url,
-        title: page.title,
-        text: page.text,
+        url: s.page.url,
+        title: s.page.title,
+        text: s.page.text,
         screenshot,
-        score: result.score,
-        label: result.label,
-        findings: result.findings.filter((f) => f.severity === "danger" || f.severity === "warning").map((f) => f.title),
+        score: s.result.score,
+        label: s.result.label,
+        findings: s.result.findings.filter((f) => f.severity === "danger" || f.severity === "warning").map((f) => f.title),
       });
       const blob = new Blob([JSON.stringify(ev, null, 1)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `satya-evidence-${new URL(page.url).hostname}-${ev.header.capturedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
+      a.download = `satya-evidence-${s.host}-${ev.header.capturedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
       a.click();
       setSaved(ev.fingerprint);
+      if (!screenshot) setError("Saved without a screenshot (Chrome didn't allow capturing this tab).");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <section className="privacy">
-      <p className="muted">
-        <strong>Save evidence.</strong> Scam pages vanish fast. This saves the page's text, a screenshot and these findings
-        to a file on your computer. Then you can anchor its fingerprint on Arkiv (only the hash, never the page) to prove
-        later that the file existed by then, unchanged.
+    <section className="action">
+      <button className="btn ghost" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : "Save evidence"}</button>
+      <p className="fine">
+        Scam pages vanish fast. Saves the page text, a screenshot and this receipt to a file on your computer. Anchor its
+        fingerprint on Arkiv (only the hash, never the page) to prove later that it existed, unchanged.
       </p>
-      <button className="primary" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : "Save evidence"}</button>
       {saved && (
-        <p className="muted">
-          Saved. Fingerprint <code>{saved.slice(0, 16)}…</code>{" "}
-          <a href={`${__SATYA_WEB_URL__}/#evidence=${saved}`} target="_blank" rel="noreferrer">Anchor it on Arkiv →</a>
-        </p>
+        <div className="saved">
+          <div className="eyebrow">Evidence fingerprint</div>
+          <div className="hash">{saved}</div>
+          <a className="btn small" href={`${__SATYA_WEB_URL__}/#evidence=${saved}`} target="_blank" rel="noreferrer">Anchor on Arkiv →</a>
+        </div>
       )}
+      {error && <p className="fine warn">{error}</p>}
     </section>
+  );
+}
+
+function Receipt({ s }: { s: Done }) {
+  const { result } = s;
+  const shown = result.findings.filter((f) => !(f.check === "records" && f.title.startsWith("Checked privately")));
+  return (
+    <article className="receipt">
+      <div className="receipt-head">
+        <div className="eyebrow">Satya · Site receipt</div>
+        <div className="site">{s.host}</div>
+        <div className="meta">
+          {s.checkedAt.toLocaleString()} · {s.deep ? "deeper check" : "private check"}
+        </div>
+      </div>
+      <div className="verdict">
+        <Seal result={result} />
+        <div className="verdict-text">
+          <span className={`stamp ${result.level}`}>{STAMP[result.level]}</span>
+          <p>{MEANING[result.level]}</p>
+        </div>
+      </div>
+      <hr className="dash" />
+      {GROUPS.map(([check, name]) => {
+        const items = shown.filter((f) => f.check === check);
+        if (!items.length) return null;
+        return (
+          <section key={check} className="group">
+            <div className="eyebrow">{name}</div>
+            <ul>{items.map((f, i) => <Line key={i} f={f} tabId={s.tabId} />)}</ul>
+          </section>
+        );
+      })}
+      {!shown.length && <p className="fine">No warnings on this page. That isn't a guarantee: stay careful with money and passwords.</p>}
+      <hr className="dash" />
+      <Proof s={s} />
+      <div className="receipt-foot">
+        Score = 100 − the points shown above. Every point comes from a line with its source.
+      </div>
+    </article>
   );
 }
 
@@ -162,8 +280,6 @@ function App() {
       return;
     }
     // Default check: the only network request is one Arkiv bucket id (often answered from cache).
-    // The deeper check, only on request, also looks up domain age, certificates, ENS names and
-    // proofs, and the AI detector if the user turned it on.
     const [ctx, registry] = await Promise.all([loadContext(), checkRegistry(page, cachedBucket)]);
     // Lists the Arkiv registry answered for are not checked again from the bundled copy.
     const covered = new Set([...registry.covered.domain, ...registry.covered.address]);
@@ -174,44 +290,32 @@ function App() {
         ? []
         : (ctx.addressLists ?? []).filter((l) => !covered.has(BUNDLED_TO_REGISTRY[l.source] ?? "")),
     };
-    const registryNote: Finding = registry.reachable
-      ? {
-          check: "records",
-          severity: "info",
-          title: "Checked privately against Satya's registry on Arkiv",
-          detail: `Arkiv was only asked for bucket ${registry.bucketsAsked.join(", ") || "none"} (1/256 of all sites each). It never saw this site's address. Matching happened on your computer.`,
-          source: "Satya scam registry on Arkiv",
-          weight: 0,
-        }
-      : {
-          check: "records",
-          severity: "info",
-          title: "Couldn't reach Satya's registry on Arkiv",
-          detail: "Used the copy of the lists bundled with the extension instead.",
-          source: "Satya scam registry on Arkiv",
-          weight: 0,
-        };
     const [base, identity, images] = await Promise.all([
       analyzePage(page, { ...localCtx, network: deep }),
       deep ? checkIdentity(page, identityDeps).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
       deep
-        ? checkImageCredentials(page.images ?? [])
-            .then((r) => credentialFindings(r.creds, r.checked))
-            .catch(() => [] as Finding[])
-        : Promise.resolve([] as Finding[]),
+        ? checkImageCredentials(page.images ?? []).catch((e): ImageCheck => ({ creds: [], found: 0, checked: 0, errors: [String(e)] }))
+        : Promise.resolve(undefined),
     ]);
-    const result = scoreFindings([...base.findings, ...registry.findings, registryNote, ...identity, ...images]);
-    setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id, deep, ensNames: ensNamesOnPage(page).length, page, windowId: tab.windowId });
+    const imageFindings = images ? credentialFindings(images.creds, images.checked) : [];
+    const result = scoreFindings([...base.findings, ...registry.findings, ...identity, ...imageFindings]);
+    setState({
+      status: "done",
+      host: new URL(page.url).hostname,
+      result,
+      tabId: tab.id,
+      windowId: tab.windowId,
+      deep,
+      ensNames: ensNamesOnPage(page).length,
+      page,
+      registry,
+      images,
+      checkedAt: new Date(),
+    });
     await sendToTab(tab.id, {
       type: "highlight",
       items: result.findings
-        .filter(
-          (f) =>
-            f.evidence &&
-            f.check !== "phishing" &&
-            f.severity !== "good" &&
-            !(f.check === "identity" && f.severity === "info"),
-        )
+        .filter((f) => f.evidence && f.check !== "phishing" && f.severity !== "good" && !(f.check === "identity" && f.severity === "info"))
         .map((f) => ({ evidence: f.evidence!, severity: f.severity, title: f.title })),
     });
   }, []);
@@ -232,48 +336,29 @@ function App() {
 
   return (
     <main>
-      <header>
-        <h1>Satya <span className="muted">सत्य</span></h1>
-        <button className="ghost" onClick={() => void run(false)} aria-label="Re-check this page">↻</button>
+      <header className="top">
+        <div className="brand">
+          Satya <span className="brand-hi">सत्य</span>
+        </div>
+        <button className="icon" onClick={() => void run(false)} aria-label="Re-check this page" title="Re-check">↻</button>
       </header>
-
-      {state.status === "loading" && <p className="muted">Checking this page…</p>}
+      {state.status === "loading" && <div className="receipt loading"><div className="eyebrow">Checking this page…</div></div>}
       {state.status === "unsupported" && (
-        <p className="muted">Open a website to check it. (Browser pages and the Chrome Web Store can't be checked; try reloading the page if you just installed Satya.)</p>
+        <div className="receipt">
+          <p className="fine">
+            Open a website to check it. Browser pages and the Chrome Web Store can't be checked. If you just installed or
+            reloaded Satya, reload the page too.
+          </p>
+        </div>
       )}
       {state.status === "done" && (
         <>
-          <section className={`summary ${state.result.level}`}>
-            <ScoreRing score={state.result.score} level={state.result.level} />
-            <div>
-              <div className="verdict">{state.result.label}</div>
-              <div className="host">{state.host}</div>
-              {state.result.level === "unverified" && (
-                <div className="muted small-note">
-                  Nothing wrong found, but nothing confirms this site is legitimate either
-                  {state.deep ? "." : ". Run the deeper check for its age and certificate."}
-                </div>
-              )}
-            </div>
-          </section>
-          {(Object.keys(CHECK_NAMES) as Finding["check"][]).map((check) => {
-            const items = state.result.findings.filter((f) => f.check === check);
-            if (!items.length) return null;
-            return (
-              <section key={check} className="group">
-                <h2>{CHECK_NAMES[check]}</h2>
-                <ul>{items.map((f, i) => <FindingRow key={i} f={f} tabId={state.tabId} />)}</ul>
-              </section>
-            );
-          })}
-          {state.result.findings.length === 0 && (
-            <p className="muted">No warnings found. That isn't a guarantee; stay careful with money and passwords.</p>
-          )}
+          <Receipt s={state} />
+          {!state.deep && <DeeperCheck ensNames={state.ensNames} onRun={() => void run(true)} />}
+          <SaveEvidence s={state} />
         </>
       )}
-      {state.status === "done" && <DeeperCheck deep={state.deep} ensNames={state.ensNames} onRun={() => void run(true)} />}
-      {state.status === "done" && <SaveEvidence page={state.page} result={state.result} windowId={state.windowId} />}
-      <footer className="muted">Every point lost comes from a finding above, with its source.</footer>
+      <footer className="build">Satya build {__BUILD_TIME__} · no trackers · no Satya server</footer>
     </main>
   );
 }
