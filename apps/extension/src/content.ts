@@ -1,3 +1,4 @@
+import { FIELD_KINDS, INSTALLER_LINK } from "@satya/checks/src/html.js";
 import type { Severity } from "@satya/checks";
 import { MAX_TEXT, type ContentRequest } from "./messages";
 
@@ -10,17 +11,6 @@ const COLORS: Record<Severity, string> = {
 };
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-
-const FIELD_KINDS: [string, RegExp][] = [
-  ["otp", /\botp\b|one[- ]?time|verification code|one-time-code/],
-  ["cvv", /\bcvv\b|\bcvc\b|security code|cc-csc/],
-  ["card", /card ?(number|no)|cc-number|debit card|credit card/],
-  ["upi-pin", /upi ?pin|\bmpin\b/],
-  ["aadhaar", /aadha?ar/],
-  ["pan", /\bpan\b ?(no|number|card)?/],
-  ["seed-phrase", /seed|mnemonic|recovery phrase|secret phrase|secret recovery/],
-  ["private-key", /private ?key/],
-];
 
 /** Describes an input using everything that hints at what it's for. */
 function describeInput(el: HTMLInputElement | HTMLTextAreaElement): string {
@@ -56,7 +46,7 @@ function signals() {
   ).length;
   const downloadLinks = [...document.querySelectorAll<HTMLAnchorElement>("a[href]")]
     .map((a) => a.href)
-    .filter((h) => /\.(apk|exe|msi|scr|bat|cmd|jar|dmg|pkg|vbs|ps1)(\?|#|$)/i.test(h))
+    .filter((h) => INSTALLER_LINK.test(h))
     .slice(0, 20);
   const scriptHosts = [
     ...new Set(
