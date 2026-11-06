@@ -51,6 +51,11 @@ people prove facts about themselves (18+, nationality, ID valid) without showing
 5. Complete `scripts/import/rbi-alert-list.json` from RBI's official Alert List (rbi.org.in blocks scripts).
 6. Demo video (≤ 3 min), deploy the web app, submit.
 
+## Team
+
+- **Ishita** is the registered ETHGlobal hacker; her GitHub is `coolcoolercoolestkid`. Dhruv also works on the project.
+- Everything on GitHub (commits, pushes, the repo) and on the ETHGlobal site must come from Ishita's account, or the entry may be disqualified.
+
 ## Decisions and preferences (keep these)
 
 - **Commits are authored as `coolcoolercoolestkid <coolcoolercoolestkid@gmail.com>`** (set in local git config). No Claude co-author lines. Commit after each step: ETHGlobal penalises one giant commit.
@@ -61,7 +66,7 @@ people prove facts about themselves (18+, nationality, ID valid) without showing
 
 ## Remotes
 
-- `origin` → github.com/thecherrycoder-dev/Satya (private; gh is logged in as thecherrycoder-dev).
+- `origin` → github.com/thecherrycoder-dev/Satya (private; temporary, made by mistake from the wrong account; don't push here).
 - `coolcoolercoolestkid` → github.com/coolcoolercoolestkid/Satya (empty; needs that account to push). ETHGlobal needs a **public** repo at submission time.
 
 ## Gotchas
