@@ -52,7 +52,7 @@ export function certificateFindings(host: string, issuances: Issuance[], now = n
       title: `Certificate verifies the company behind the site (${best})`,
       detail: `${issuer} checked the organisation's legal identity before issuing it.`,
       source,
-      weight: 0,
+      weight: best === "EV" ? 15 : 10,
     });
   } else {
     findings.push({

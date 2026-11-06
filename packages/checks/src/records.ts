@@ -40,26 +40,54 @@ export function domainAgeFinding(domain: string, registered: Date, now = new Dat
     };
   }
   const years = Math.floor(days / 365);
+  // Trust points grow with history: a scam rarely keeps the same domain for years.
+  const points = years >= 10 ? 25 : years >= 5 ? 20 : years >= 2 ? 15 : years >= 1 ? 8 : 0;
   return {
     check: "records",
-    severity: years >= 2 ? "good" : "info",
+    severity: points ? "good" : "info",
     title: years >= 1 ? `Domain is ${years}+ year${years === 1 ? "" : "s"} old` : "Domain is over 6 months old",
     detail: `${domain} was registered on ${when}.`,
     source,
-    weight: 0,
+    weight: points,
   };
 }
 
-/** Looks up a domain's registration date via the public RDAP bootstrap service. */
+let bootstrap: Promise<Map<string, string>> | undefined;
+
+/**
+ * IANA's RDAP bootstrap file maps each top-level domain to its registry's RDAP server, so the
+ * lookup goes straight to the registry (e.g. Verisign for .com) instead of through a middleman.
+ */
+function rdapServers(fetchImpl: typeof fetch): Promise<Map<string, string>> {
+  bootstrap ??= (async () => {
+    const res = await fetchImpl("https://data.iana.org/rdap/dns.json");
+    const body = (await res.json()) as { services: [string[], string[]][] };
+    const map = new Map<string, string>();
+    for (const [tlds, urls] of body.services) {
+      const url = urls.find((u) => u.startsWith("https://")) ?? urls[0];
+      if (url) for (const t of tlds) map.set(t.toLowerCase(), url.endsWith("/") ? url : `${url}/`);
+    }
+    return map;
+  })().catch((e) => {
+    bootstrap = undefined;
+    throw e;
+  });
+  return bootstrap;
+}
+
+/** Looks up a domain's registration date from its registry's RDAP server. */
 export async function lookupDomainAge(
   host: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Finding | undefined> {
   const domain = registrableDomain(host);
   try {
-    const res = await fetchImpl(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
-      headers: { accept: "application/rdap+json" },
-    });
+    const labels = domain.split(".");
+    const servers = await rdapServers(fetchImpl).catch(() => new Map<string, string>());
+    // Longest matching suffix first ("co.in" before "in").
+    const base = labels.map((_, i) => servers.get(labels.slice(i).join("."))).find(Boolean);
+    const url = base ? `${base}domain/${encodeURIComponent(domain)}` : `https://rdap.org/domain/${encodeURIComponent(domain)}`;
+    const res = await fetchImpl(url, { headers: { accept: "application/rdap+json" } });
     if (!res.ok) return undefined;
     const date = registrationDateFromRdap((await res.json()) as RdapResponse);
     return date ? domainAgeFinding(domain, date) : undefined;
@@ -98,4 +126,58 @@ export function checkAddresses(text: string, lists: AddressLabelList[]): Finding
     }
   }
   return findings;
+}
+
+/**
+ * When the Internet Archive first captured the site: its public "original release" date.
+ * Long archive history is hard for a scam to fake; a site first seen weeks ago is a warning.
+ */
+export function archiveFinding(domain: string, firstSeen: Date | undefined, now = new Date()): Finding {
+  const source = "Internet Archive Wayback Machine (first capture)";
+  if (!firstSeen) {
+    return {
+      check: "records",
+      severity: "info",
+      title: "The Internet Archive has never captured this site",
+      detail: "Common for small or brand-new sites; on its own it means little.",
+      source,
+      weight: 0,
+    };
+  }
+  const days = Math.floor((now.getTime() - firstSeen.getTime()) / 86_400_000);
+  const when = firstSeen.toISOString().slice(0, 10);
+  if (days < 90) {
+    return {
+      check: "records",
+      severity: "warning",
+      title: `First seen online only ${days} day${days === 1 ? "" : "s"} ago`,
+      detail: `The Internet Archive's first capture of ${domain} is from ${when}.`,
+      source,
+      weight: 8,
+    };
+  }
+  const years = Math.floor(days / 365);
+  const points = years >= 10 ? 10 : years >= 3 ? 6 : years >= 1 ? 3 : 0;
+  return {
+    check: "records",
+    severity: points ? "good" : "info",
+    title: years >= 1 ? `Online since ${firstSeen.getUTCFullYear()} (${years}+ year${years === 1 ? "" : "s"} of history)` : `Online for ${Math.round(days / 30)} months`,
+    detail: `The Internet Archive's first capture of ${domain} is from ${when}.`,
+    source,
+    weight: points,
+  };
+}
+
+export async function lookupArchiveHistory(host: string, fetchImpl: typeof fetch = fetch): Promise<Finding | undefined> {
+  const domain = registrableDomain(host);
+  try {
+    const res = await fetchImpl(`https://archive.org/wayback/available?url=${encodeURIComponent(domain)}&timestamp=19900101`);
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { archived_snapshots?: { closest?: { timestamp?: string; available?: boolean } } };
+    const ts = body.archived_snapshots?.closest?.timestamp;
+    const first = ts ? new Date(`${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T00:00:00Z`) : undefined;
+    return archiveFinding(domain, first && !Number.isNaN(first.getTime()) ? first : undefined);
+  } catch {
+    return undefined;
+  }
 }

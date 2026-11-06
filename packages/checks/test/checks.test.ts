@@ -188,9 +188,18 @@ describe("score labels", () => {
   it("says 'No red flags found' when nothing vouches for a site, and keeps AI content out of the score", async () => {
     const { scoreFindings } = await import("../src/index.js");
     expect(scoreFindings([]).label).toBe("No red flags found");
-    const old = scoreFindings([{ check: "records", severity: "good", title: "Domain is 10+ years old", source: "RDAP", weight: 0 }]);
-    expect(old.label).toBe("Looks trustworthy");
+    expect(scoreFindings([]).score).toBe(50);
+    const old = scoreFindings([
+      { check: "records", severity: "good", title: "Domain is 10+ years old", source: "RDAP", weight: 25 },
+      { check: "records", severity: "good", title: "Certificate verifies the company behind the site (OV)", source: "CT", weight: 10 },
+    ]);
+    expect(old).toMatchObject({ score: 85, label: "Looks trustworthy" });
     const ai = scoreFindings([{ check: "ai", severity: "warning", title: "broken label", source: "C2PA", weight: 10 }]);
-    expect(ai.score).toBe(100);
+    expect(ai.score).toBe(50);
+    const listed = scoreFindings([
+      { check: "records", severity: "good", title: "Domain is 10+ years old", source: "RDAP", weight: 25 },
+      { check: "phishing", severity: "danger", title: "Known phishing site", source: "list", weight: 70 },
+    ]);
+    expect(listed.score).toBeLessThanOrEqual(5);
   });
 });

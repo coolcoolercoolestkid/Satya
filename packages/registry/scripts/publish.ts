@@ -6,6 +6,8 @@
  *   pnpm --filter @satya/registry publish-registry publish metamask [--file config.json] [--dry-run]
  *   pnpm --filter @satya/registry publish-registry verify ofac|metamask [--file …]
  *   pnpm --filter @satya/registry publish-registry lookup <domain or 0x address>
+ *   pnpm --filter @satya/registry publish-registry publish ofac-addresses [--file SDN.XML]
+ *   pnpm --filter @satya/registry publish-registry refresh   (re-publishes only lists that changed or are due)
  *
  * Downloads a public list from its official source, hashes and buckets it, and writes one
  * Arkiv record per bucket (256 per source), owned by the Satya publisher wallet and expiring
@@ -36,7 +38,10 @@ import {
   domainCandidates,
   matchInRecords,
   SATYA_PUBLISHER,
+  parseSdnAddresses,
+  SanctionedAddress,
 } from "../src/index.js";
+import { addr } from "@arkiv-network/sdk/schema";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const ENV = `${ROOT}.env`;
@@ -227,6 +232,75 @@ async function lookup(value: string) {
   if (!hits.length) console.log("  No match in Satya's registry.");
 }
 
+/** OFAC as one plain, filterable record per address (in addition to the hashed buckets). */
+async function publishOfacAddresses(file?: string) {
+  const raw = await download(OFAC_URL, file);
+  const sha = await sha256Hex(raw);
+  const entries = parseSdnAddresses(new TextDecoder().decode(raw));
+  console.log(`OFAC SDN: ${entries.length} Ethereum-format addresses. Source SHA-256 ${sha}`);
+  const account = publisher();
+  const wallet = createWalletClient({ chain: rabdi({ accessKey: accessKey() }), transport: http(), account });
+  const published = BigInt(Math.floor(Date.now() / 1000));
+  const date = new Date().toISOString().slice(0, 10);
+  const keys: Record<string, string> = {};
+  const queue = [...entries];
+  async function worker() {
+    for (let e = queue.shift(); e; e = queue.shift()) {
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const { entityKey } = await wallet.createEntity(
+            SanctionedAddress,
+            {
+              address: addr(e.address as `0x${string}`),
+              list: "ofac-sdn",
+              name: e.name || "(unnamed)",
+              sdnType: e.sdnType || "Unknown",
+              program: e.programs[0] ?? "",
+              programs: e.programs.join(",").slice(0, 120),
+              currency: e.currency,
+              sdnUid: e.sdnUid,
+              date,
+              published: u64(published),
+              sourceSha256: sha,
+            },
+            { expiration: BUCKET_LIFETIME },
+          );
+          keys[e.address] = entityKey;
+          break;
+        } catch (err) {
+          if (attempt >= 10) throw err;
+          await new Promise((r) => setTimeout(r, Math.min(60_000, 5000 * attempt)));
+        }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker));
+  mkdirSync(`${ROOT}runs`, { recursive: true });
+  const out = `${ROOT}runs/ofac-addresses-${date}.json`;
+  writeFileSync(out, JSON.stringify({ source: "ofac-sdn", sourceUrl: OFAC_URL, sourceSha256: sha, publisher: account.address, date, entityKeys: keys }, null, 2) + "\n");
+  console.log(`Done: ${Object.keys(keys).length} address records. Manifest: ${out}`);
+}
+
+/**
+ * Keeps the registry current: for each list, download the official file and re-publish only if
+ * the file changed, or the last run is old enough that its 7-day records would soon expire.
+ */
+async function refresh() {
+  const DUE_MS = 4 * 86_400_000;
+  for (const which of ["ofac", "metamask", ...Object.keys(TEXT_LISTS)]) {
+    const src = await load(which);
+    const current = (await fetchBucket("00", publisher().address, accessKey())).find((r) => r.source === src.sourceId);
+    const fresh = current && current.sourceSha256 === src.sha256 && Date.now() - current.published * 1000 < DUE_MS;
+    if (fresh) {
+      console.log(`${src.sourceId}: unchanged and fresh (published ${current!.date}), skipped`);
+      continue;
+    }
+    console.log(`${src.sourceId}: ${current ? (current.sourceSha256 === src.sha256 ? "due for renewal" : "source changed") : "not on Arkiv yet"}, publishing…`);
+    await publish(which, undefined, false);
+    if (which === "ofac") await publishOfacAddresses();
+  }
+}
+
 function keygen() {
   const existing = process.env.SATYA_PUBLISHER_KEY;
   if (existing && isHex(existing)) {
@@ -243,7 +317,9 @@ const [cmd, which, ...rest] = process.argv.slice(2);
 const fileIdx = rest.indexOf("--file");
 const file = fileIdx >= 0 ? rest[fileIdx + 1] : undefined;
 if (cmd === "keygen") keygen();
+else if (cmd === "publish" && which === "ofac-addresses") await publishOfacAddresses(file);
 else if (cmd === "publish" && which) await publish(which, file, rest.includes("--dry-run"));
+else if (cmd === "refresh") await refresh();
 else if (cmd === "verify" && which) await verify(which, file);
 else if (cmd === "lookup" && which) await lookup(which);
 else console.log("Usage: keygen | publish <ofac|metamask> [--file path] [--dry-run] | verify <ofac|metamask> [--file path] | lookup <domain|address>");

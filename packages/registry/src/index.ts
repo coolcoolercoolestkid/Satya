@@ -15,7 +15,7 @@
 import { createPublicClient, ExpirationTime } from "@arkiv-network/sdk";
 import { rabdi } from "@arkiv-network/sdk/chains";
 import { desc, eq } from "@arkiv-network/sdk/query";
-import { bytes, defineSchema, str, u64 } from "@arkiv-network/sdk/schema";
+import { addr, bytes, defineSchema, str, u64 } from "@arkiv-network/sdk/schema";
 import { registrableDomain } from "@satya/checks/src/domain.js";
 import { FREE_HOSTS } from "@satya/checks/src/structure.js";
 import { http, type Address, type Hex } from "viem";
@@ -311,3 +311,80 @@ export async function matchInRecords(
   return hits;
 }
 export * from "./check.js";
+
+// ---------- OFAC sanctioned addresses, one record each (queryable) ----------
+
+/**
+ * The OFAC list is small (about 130 Ethereum-format addresses), so besides the private hashed
+ * buckets it is also mirrored as one plain record per address. Anyone can filter it directly
+ * by address, sanctions programme, entity type or name, without asking anyone.
+ */
+export const SanctionedAddress = defineSchema("satya_sanctioned_address_v1", {
+  /** The 0x address, as OFAC lists it. */
+  address: addr().indexed(),
+  /** "ofac-sdn". */
+  list: str().indexed(),
+  /** The sanctioned person or organisation's name, from the SDN entry. */
+  name: str().indexed(),
+  /** "Entity" or "Individual". */
+  sdnType: str().indexed(),
+  /** The first sanctions programme, e.g. "CYBER2" or "DPRK4". */
+  program: str().indexed(),
+  /** Every programme, comma-separated. */
+  programs: str(),
+  /** Currency OFAC listed it under, e.g. "ETH", "USDT", "USDC". */
+  currency: str().indexed(),
+  /** OFAC's unique id for the SDN entry, so you can look it up on sanctionssearch.ofac.treas.gov. */
+  sdnUid: str().indexed(),
+  /** Publication date, YYYY-MM-DD. */
+  date: str().indexed(),
+  /** Publication time, unix seconds; all records from one run share it. */
+  published: u64().indexed(),
+  /** SHA-256 of the SDN.XML file this came from. */
+  sourceSha256: str(),
+});
+
+export interface SdnAddress {
+  address: string;
+  name: string;
+  sdnType: string;
+  programs: string[];
+  currency: string;
+  sdnUid: string;
+}
+
+const clip = (s: string, bytes = 120) => {
+  const enc = new TextEncoder();
+  let out = s;
+  while (enc.encode(out).length > bytes) out = out.slice(0, -1);
+  return out;
+};
+
+/** Every Ethereum-format (0x…) digital currency address in OFAC's SDN.XML, with its entry details. */
+export function parseSdnAddresses(xml: string): SdnAddress[] {
+  const out = new Map<string, SdnAddress>();
+  const tag = (block: string, t: string) => new RegExp(`<${t}>([^<]*)</${t}>`).exec(block)?.[1]?.trim() ?? "";
+  for (const m of xml.matchAll(/<sdnEntry>([\s\S]*?)<\/sdnEntry>/g)) {
+    const entry = m[1]!;
+    const first = tag(entry, "firstName");
+    const last = tag(entry, "lastName");
+    const name = clip([first, last].filter(Boolean).join(" ").replace(/&amp;/g, "&"));
+    const programs = [...entry.matchAll(/<program>([^<]*)<\/program>/g)].map((p) => p[1]!.trim());
+    for (const id of entry.matchAll(/<id>([\s\S]*?)<\/id>/g)) {
+      const type = tag(id[1]!, "idType");
+      const num = tag(id[1]!, "idNumber");
+      if (!type.startsWith("Digital Currency Address") || !/^0x[0-9a-fA-F]{40}$/.test(num)) continue;
+      const key = num.toLowerCase();
+      if (out.has(key)) continue;
+      out.set(key, {
+        address: key,
+        name,
+        sdnType: tag(entry, "sdnType"),
+        programs,
+        currency: type.replace("Digital Currency Address - ", "").trim(),
+        sdnUid: tag(entry, "uid"),
+      });
+    }
+  }
+  return [...out.values()];
+}

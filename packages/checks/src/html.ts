@@ -16,6 +16,14 @@ export const FIELD_KINDS: [string, RegExp][] = [
   ["private-key", /private ?key/],
 ];
 
+/** Inline code that decodes and runs hidden code, or carries huge encoded blobs. */
+export function isObfuscatedScript(code: string): boolean {
+  if (/\beval\s*\(\s*(atob|unescape|decodeURIComponent|String\.fromCharCode)\s*\(/.test(code)) return true;
+  if (/eval\(function\(p,a,c,k,e,[dr]\)/.test(code)) return true; // "packed" code
+  if (/document\.write\s*\(\s*(unescape|atob)\s*\(/.test(code)) return true;
+  return /[A-Za-z0-9+/=]{4000,}/.test(code) && /\b(eval|Function|atob)\b/.test(code);
+}
+
 export const INSTALLER_LINK = /\.(apk|exe|msi|scr|bat|cmd|jar|dmg|pkg|vbs|ps1)(\?|#|$)/i;
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39": "'", rupee: "₹" };
@@ -115,6 +123,27 @@ export function snapshotFromHtml(html: string, url: string, maxText = 20000): Pa
     .trim()
     .slice(0, maxText);
 
+  const hiddenFrameHosts: string[] = [];
+  for (const m of body.matchAll(/<iframe\b([^>]*)>/gi)) {
+    const a = attrs(m[1]!);
+    const tiny = (a.width === "0" || a.width === "1") && (a.height === "0" || a.height === "1");
+    const hiddenStyle = /display\s*:\s*none|visibility\s*:\s*hidden/i.test(a.style ?? "");
+    if ((tiny || hiddenStyle || "hidden" in a) && a.src) {
+      const h = resolve(a.src, url)?.hostname;
+      if (h) hiddenFrameHosts.push(h);
+    }
+  }
+  let obfuscatedScripts = 0;
+  for (const m of body.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+    if (isObfuscatedScript(m[1]!)) obfuscatedScripts++;
+  }
+  const refresh = /<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/i.exec(body)?.[0];
+  const metaRefresh = refresh ? /url\s*=\s*['"]?([^'">\s]+)/i.exec(attrs(refresh).content ?? "")?.[1] ?? null : null;
+  const pageIsHttps = resolve(url, url)?.protocol === "https:";
+  const mixedContent = pageIsHttps
+    ? [...body.matchAll(/<(img|script|iframe)\b([^>]*)>/gi)].filter((m) => /^http:\/\//i.test(attrs(m[2]!).src ?? "")).length
+    : 0;
+
   return {
     url,
     title,
@@ -127,6 +156,10 @@ export function snapshotFromHtml(html: string, url: string, maxText = 20000): Pa
       maxInputsInOneForm: maxInputs,
       downloadLinks,
       scriptHosts,
+      hiddenFrameHosts,
+      obfuscatedScripts,
+      metaRefresh,
+      mixedContent,
     },
   };
 }

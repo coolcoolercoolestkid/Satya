@@ -116,6 +116,42 @@ export const SCAM_RULES: ScamRule[] = [
     weight: 40,
   },
   {
+    id: "sextortion",
+    title: "Threatens to leak private videos or photos unless you pay",
+    detail: "This is a mass-sent extortion scam. The sender almost never has anything; don't pay or reply.",
+    pattern:
+      /\b(i (have )?(recorded|hacked|filmed) you|recorded (you|your screen) (while|watching)|(intimate|private|adult|explicit) (video|videos|photos|pictures) of you|send (it|the video|them) to (all )?(your )?(contacts|friends|family))\b/i,
+    severity: "danger",
+    weight: 55,
+  },
+  {
+    id: "ransom-note",
+    title: "Ransom demand: says your files are locked until you pay",
+    detail: "Ransomware notes demand crypto for your files. Paying funds criminals and often doesn't restore anything.",
+    pattern:
+      /\b(your (files|documents|data) (have been|are|were) (encrypted|locked)|to (decrypt|recover|unlock) your (files|data)|pay (the )?ransom|decryption (key|tool) .{0,40}(bitcoin|btc|monero|usdt))\b/i,
+    severity: "danger",
+    weight: 55,
+  },
+  {
+    id: "pay-or-else",
+    title: "Demands crypto payment by a deadline, with a threat",
+    detail: "Deadlines plus threats plus crypto is the shape of extortion and fake fines.",
+    pattern:
+      /\b(within|in the next|you have)\s+\d{1,3}\s*(hours?|hrs?|minutes?|days?)\b.{0,120}\b(bitcoin|btc|usdt|crypto|wallet address)\b|\b(bitcoin|btc|usdt)\b.{0,120}\b(or (else|we will|i will)|otherwise (we|i) will)\b/i,
+    severity: "danger",
+    weight: 45,
+  },
+  {
+    id: "fake-fine",
+    title: "Fake fine or arrest notice demanding payment",
+    detail: "Police, courts and cyber cells never collect fines through websites, UPI IDs or gift cards.",
+    pattern:
+      /\b(pay (the |a )?(fine|penalty)|penalty of (rs\.?|₹|inr)\s?[\d,]+).{0,120}\b(arrest|warrant|police|cyber ?cell|court|legal action)\b|\b(arrest|warrant|legal action).{0,120}\b(pay (the |a )?(fine|penalty))\b/i,
+    severity: "danger",
+    weight: 45,
+  },
+  {
     id: "kyc-threat",
     title: "Threatens to block your account unless you update KYC",
     detail: "Banks, Paytm and telecoms don't block accounts through links. This is a common Indian SMS scam.",

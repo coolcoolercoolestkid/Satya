@@ -70,7 +70,7 @@ export function checkPhishing(page: PageSnapshot, ctx: PhishingContext): Finding
         ? `Matches the domain linked to ${official.ensName}.`
         : `${registrableDomain(host)} is ${official.name}'s official domain.`,
       source: official.ensName ? `ENS: ${official.ensName}` : "Satya verified brand list",
-      weight: 0,
+      weight: 45,
     });
   }
 

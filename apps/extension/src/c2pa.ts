@@ -1,7 +1,7 @@
 import { createC2pa, Reader } from "@contentauth/c2pa-web";
 
 type C2pa = Awaited<ReturnType<typeof createC2pa>>;
-import { readCredential, type ImageCredential, type ManifestStoreLike } from "@satya/checks";
+import { aiMetadataMarker, readCredential, type ImageCredential, type ManifestStoreLike } from "@satya/checks";
 
 /** Images larger than this are skipped (a label is read from the whole file). */
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -42,19 +42,22 @@ export interface ImageCheck {
   /** Images actually read. */
   checked: number;
   errors: string[];
+  /** Images whose plain metadata names an AI tool (unsigned). */
+  metadata: { url: string; tool: string }[];
 }
 
 export async function checkImageCredentials(urls: string[]): Promise<ImageCheck> {
-  if (!urls.length) return { creds: [], found: 0, checked: 0, errors: [] };
+  if (!urls.length) return { creds: [], found: 0, checked: 0, errors: [], metadata: [] };
   const errors: string[] = [];
   let c: C2pa;
   try {
     c = await sdk();
   } catch (e) {
     c2pa = undefined;
-    return { creds: [], found: urls.length, checked: 0, errors: [`C2PA reader failed to start: ${e instanceof Error ? e.message : String(e)}`] };
+    return { creds: [], found: urls.length, checked: 0, metadata: [], errors: [`C2PA reader failed to start: ${e instanceof Error ? e.message : String(e)}`] };
   }
   const creds: ImageCredential[] = [];
+  const metadata: { url: string; tool: string }[] = [];
   let checked = 0;
   for (const url of urls) {
     try {
@@ -66,6 +69,8 @@ export async function checkImageCredentials(urls: string[]): Promise<ImageCheck>
       const blob = await res.blob();
       if (blob.size > MAX_IMAGE_BYTES || !blob.type.startsWith("image/")) continue;
       checked++;
+      const tool = aiMetadataMarker(new Uint8Array(await blob.slice(0, 256 * 1024).arrayBuffer()));
+      if (tool) metadata.push({ url, tool });
       let store: ManifestStoreLike | null = null;
       try {
         const reader = await Reader.fromBlob(c, blob.type, blob);
@@ -82,5 +87,5 @@ export async function checkImageCredentials(urls: string[]): Promise<ImageCheck>
       errors.push(`${url.split("/").pop()}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return { creds, found: urls.length, checked, errors };
+  return { creds, found: urls.length, checked, errors, metadata };
 }

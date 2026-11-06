@@ -40,21 +40,32 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 
 ## How the score works
 
-1. Start at **100**. Every warning or danger the checks find takes off its points, and each
-   one is shown with its reason and source.
-2. **Any danger caps the score at 60.** An official brand, `.gov.in` or `.bank.in` domain lifts
-   it to at least 85.
-3. **75 or more** shows **"Looks trustworthy"** only when something positive vouches for the
-   site: an official brand domain, a `.gov.in`/`.bank.in` domain, a company-verified (OV/EV)
-   certificate, or a domain registered years ago. Without that it shows **"No red flags
-   found"**: Satya saw nothing wrong, but nothing proves the site either. Run the deeper check
-   to look up its age and certificate.
-4. 45–74 is **"Be careful"**, below 45 **"High risk"**.
-5. **AI content** (AI images by Content Credentials) is shown in its own box and never changes
-   the score: AI-made content isn't a scam by itself.
+The score is the **amount of trust the evidence supports**, from 0 to 100. Every point comes
+from a line on the receipt, with its source.
 
-A site with no warnings isn't proven safe. Satya's lists and rules catch known phishing,
-sanctioned wallets, lookalikes and common scam patterns, not every bad site on the web.
+1. **An unknown site starts at 50**: no evidence either way. (It used to start at 100, which made
+   every unknown site look perfect.)
+2. **Trust evidence adds points**, only from things a scammer can't easily fake: an official
+   brand domain or `.gov.in` / `.bank.in` (+45); a domain registered years ago (+8 to +25 by
+   age); a company-verified OV/EV certificate (+10/+15); a long Internet Archive history (+3 to
+   +10).
+3. **Risk evidence takes points away**: scam wording, extortion and scareware, requests for an
+   OTP / UPI PIN / seed phrase, forms sending data elsewhere, crypto miners, hidden frames,
+   scrambled code, drive-by downloads, a brand-new domain or certificate, and so on.
+4. **Decisive evidence overrides the sum.** On a phishing, scam, fraud, ransomware or sanctions
+   list: at most 5. Impersonating a known brand: at most 15. Any other danger: at most 35. An
+   official domain with no danger: at least 90.
+5. **Bands:** 75+ *Looks trustworthy* · 45–74 *No red flags / Probably fine / Mixed signals* ·
+   25–44 *Be careful* · below 25 *High risk*.
+6. **AI content and people's proofs are shown but don't move the score**: AI-made content isn't a
+   scam by itself.
+
+By default only the private checks run, so most unknown sites show **50, "No red flags found"**.
+That's honest: nothing has vouched for them yet. **Run deeper check** adds domain age,
+certificate and archive history, which is what moves a real site up.
+
+How well this separates real sites from phishing sites is measured, not assumed: see
+[docs/evaluation.md](docs/evaluation.md).
 
 ## Satya on Arkiv
 

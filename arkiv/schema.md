@@ -38,7 +38,7 @@ site without telling anyone which site it is.
 - **Addresses** go in the bucket given by the first byte of their own hash.
 - **Domains** go in the bucket of their *site*: the registrable domain (`login.evil.com` →
   `evil.com`), or, on shared hosts such as `pages.dev`, `netlify.app` or `vercel.app`, one label
-  under the host (`scam.pages.dev`; about 80 hosting, dynamic-DNS and IPFS-gateway services are
+  under the host (`scam.pages.dev`; 85 hosting, dynamic-DNS and IPFS-gateway services are
   treated this way). So one bucket lookup covers a site and all its subdomains. The record stores the hash of each full listed entry.
 - The extension hashes the visited host and each parent up to the site, and checks those
   hashes against the bucket on the user's computer.
@@ -114,3 +114,31 @@ text and screenshot, and the SHA-256 of the canonical header (keys sorted) is th
 Checking a file: recompute the text and screenshot hashes, then the fingerprint, then look up
 records with that fingerprint. The oldest record's block time is when the file was proven to
 exist, unchanged. It doesn't prove the website served it (that would need zkTLS).
+
+## 4. `satya_sanctioned_address_v1`: OFAC addresses, one record each
+
+The OFAC list is small, so besides the private hashed buckets it's also mirrored as one plain
+record per address that anyone can filter directly. (Looking up a public sanctions list by
+address costs no privacy.)
+
+- **Owner:** Satya's publisher wallet `0x0D341d00bB9c2327033f447b45Ebb8712521E736`.
+- **Expiry:** 7 days; renewed by `publish-registry refresh`.
+- **Source:** official OFAC `SDN.XML`; every `Digital Currency Address` whose value is a `0x…`
+  Ethereum-format address (ETH and USDT), 127 records.
+
+| Attribute | Type | Indexed | Meaning |
+|---|---|---|---|
+| `address` | addr | yes | The sanctioned address |
+| `list` | str | yes | `"ofac-sdn"` |
+| `name` | str | yes | Name on the SDN entry (person or organisation), up to 120 bytes |
+| `sdnType` | str | yes | `"Entity"` or `"Individual"` |
+| `program` | str | yes | First sanctions programme, e.g. `DPRK4`, `CYBER2` |
+| `programs` | str | no | All programmes, comma-separated |
+| `currency` | str | yes | Currency OFAC listed it under: `ETH` or `USDT` |
+| `sdnUid` | str | yes | OFAC's id for the SDN entry |
+| `date` | str | yes | Publish date `YYYY-MM-DD` |
+| `published` | u64 | yes | Publish time (unix seconds), shared by one run |
+| `sourceSha256` | str | no | SHA-256 of the SDN.XML it came from |
+
+Example filters: `address = addr(0x…)`, `program = str('DPRK4')`, `currency = str('USDT')`,
+always with `$owner = addr(0x0D341d00bB9c2327033f447b45Ebb8712521E736)`.

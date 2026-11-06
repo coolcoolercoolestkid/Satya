@@ -37,6 +37,12 @@ export function freeHostOf(host: string): string | undefined {
 
 const isIpHost = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
 
+/** Script hosts of well-known in-browser crypto miners (Coinhive and its successors). */
+export const MINER_HOSTS = [
+  "coinhive.com", "coin-hive.com", "authedmine.com", "cryptoloot.pro", "crypto-loot.com", "webminepool.com",
+  "coinimp.com", "minero.cc", "jsecoin.com", "monerominer.rocks", "webmine.cz", "ppoi.org", "coinblind.com",
+];
+
 export function checkStructure(page: PageSnapshot, brands: Brand[]): Finding[] {
   const findings: Finding[] = [];
   const host = normalizeHost(page.url);
@@ -133,6 +139,72 @@ export function checkStructure(page: PageSnapshot, brands: Brand[]): Finding[] {
   }
 
   // Installers outside app stores.
+  // Malware and security signals.
+  const miners = s.scriptHosts.filter((h) => MINER_HOSTS.some((m) => h === m || h.endsWith(`.${m}`)));
+  if (miners.length) {
+    findings.push({
+      check: "page",
+      severity: "danger",
+      title: "Runs a cryptocurrency miner in your browser",
+      detail: `Scripts from ${miners.join(", ")} use your computer to mine crypto for someone else.`,
+      source: "Satya page check (known browser-miner script hosts)",
+      weight: 45,
+    });
+  }
+  const hidden = [...new Set((s.hiddenFrameHosts ?? []).filter((h) => h && h !== host && !h.endsWith(`.${registrableDomain(host)}`)))];
+  if (hidden.length && !trustedOrigin) {
+    findings.push({
+      check: "page",
+      severity: "warning",
+      title: "Loads invisible frames from other sites",
+      detail: `Hidden frames from ${hidden.slice(0, 3).join(", ")} can run code or ads you never see, a common way to spread malware.`,
+      source: "Satya page check",
+      weight: 15,
+    });
+  }
+  if ((s.obfuscatedScripts ?? 0) > 0 && !trustedOrigin) {
+    findings.push({
+      check: "page",
+      severity: "warning",
+      title: "Contains scrambled code that decodes and runs itself",
+      detail: "Code hidden this way (eval of encoded text, packed scripts) is how malicious pages avoid detection.",
+      source: "Satya page check",
+      weight: 15,
+    });
+  }
+  if (s.metaRefresh) {
+    let target: URL | undefined;
+    try {
+      target = new URL(s.metaRefresh, page.url);
+    } catch {
+      target = undefined;
+    }
+    if (target && (INSTALLER_RE.test(target.pathname) || registrableDomain(target.hostname) !== registrableDomain(host))) {
+      const installer = INSTALLER_RE.test(target.pathname);
+      findings.push({
+        check: "page",
+        severity: installer ? "danger" : "warning",
+        title: installer ? "Starts a file download automatically" : `Automatically sends you to another site (${target.hostname})`,
+        detail: installer
+          ? "The page redirects straight to an installer. Drive-by downloads are a classic malware trick."
+          : "Pages that bounce you elsewhere hide where you really end up.",
+        source: "Satya page check",
+        evidence: undefined,
+        weight: installer ? 45 : 10,
+      });
+    }
+  }
+  if (s.protocol === "https:" && (s.mixedContent ?? 0) > 0) {
+    findings.push({
+      check: "page",
+      severity: "info",
+      title: `${s.mixedContent} item${s.mixedContent === 1 ? "" : "s"} loaded without encryption`,
+      detail: "Parts of this secure page come over plain http, which others on your network could alter.",
+      source: "Satya page check",
+      weight: 0,
+    });
+  }
+
   const installers = [...new Set(s.downloadLinks.filter((l) => INSTALLER_RE.test(l)))];
   const apk = installers.find((l) => /\.apk(\?|#|$)/i.test(l));
   if (apk && !trustedOrigin) {
@@ -177,7 +249,7 @@ export function checkAuthority(page: PageSnapshot, brands: Brand[]): Finding[] {
       title: "Official Indian government domain",
       detail: ".gov.in and .nic.in can only be registered by government bodies.",
       source: "NIC domain rules",
-      weight: 0,
+      weight: 45,
     }];
   }
   if (host.endsWith(".bank.in")) {
@@ -187,7 +259,7 @@ export function checkAuthority(page: PageSnapshot, brands: Brand[]): Finding[] {
       title: "Registered Indian bank domain (.bank.in)",
       detail: "Only RBI-regulated banks can register .bank.in domains.",
       source: "RBI .bank.in mandate",
-      weight: 0,
+      weight: 45,
     }];
   }
 

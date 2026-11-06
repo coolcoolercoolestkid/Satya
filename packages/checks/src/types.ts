@@ -32,6 +32,14 @@ export interface PageSignals {
   downloadLinks: string[];
   /** Hosts that serve scripts on this page. */
   scriptHosts: string[];
+  /** Hosts of invisible (0-size or hidden) frames: a classic way to load malware or ad fraud. */
+  hiddenFrameHosts?: string[];
+  /** Inline scripts that decode and run hidden code (eval of base64, packed code, huge encoded strings). */
+  obfuscatedScripts?: number;
+  /** Address a meta refresh sends the visitor to, if any. */
+  metaRefresh?: string | null;
+  /** Images, scripts or frames loaded over plain http on an https page. */
+  mixedContent?: number;
 }
 
 /** What the content script reads from the page. */

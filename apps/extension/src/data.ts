@@ -89,7 +89,12 @@ export const cachedBucket: BucketFetcher = async (bucket) => {
   if (hit && Date.now() - hit.at < BUCKET_CACHE_MS) {
     return hit.records.map((r) => ({ ...r, hashes: new Set(r.hashes) }));
   }
-  const records = await fetchBucket(bucket, SATYA_PUBLISHER, __ARKIV_ACCESS_KEY__);
+  // Never let a slow or rate-limited Arkiv endpoint hang the panel: give up after 8 seconds and
+  // fall back to the bundled lists (the panel says so).
+  const records = await Promise.race([
+    fetchBucket(bucket, SATYA_PUBLISHER, __ARKIV_ACCESS_KEY__),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Arkiv timed out")), 8000)),
+  ]);
   const store: CachedBucket = { at: Date.now(), records: records.map((r) => ({ ...r, hashes: [...r.hashes] })) };
   await chrome.storage.local.set({ [key]: store });
   return records;

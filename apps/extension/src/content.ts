@@ -1,4 +1,4 @@
-import { FIELD_KINDS, INSTALLER_LINK } from "@satya/checks/src/html.js";
+import { FIELD_KINDS, INSTALLER_LINK, isObfuscatedScript } from "@satya/checks/src/html.js";
 import type { Severity } from "@satya/checks";
 import { MAX_TEXT, type ContentRequest } from "./messages";
 
@@ -59,6 +59,33 @@ function signals() {
       }),
     ),
   ].filter(Boolean);
+  // Invisible frames from other sites, scrambled inline code, auto-redirects, unencrypted parts.
+  const hiddenFrameHosts = [...document.querySelectorAll<HTMLIFrameElement>("iframe[src]")]
+    .filter((f) => {
+      const r = f.getBoundingClientRect();
+      const cs = getComputedStyle(f);
+      return r.width <= 2 || r.height <= 2 || cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0";
+    })
+    .map((f) => {
+      try {
+        return new URL(f.src).hostname;
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
+  const obfuscatedScripts = [...document.querySelectorAll<HTMLScriptElement>("script:not([src])")].filter((sc) =>
+    isObfuscatedScript(sc.textContent ?? ""),
+  ).length;
+  const refresh = document.querySelector<HTMLMetaElement>('meta[http-equiv="refresh" i]')?.content ?? "";
+  const metaRefresh = /url\s*=\s*['"]?([^'"\s]+)/i.exec(refresh)?.[1] ?? null;
+  const mixedContent =
+    location.protocol === "https:"
+      ? [...document.querySelectorAll<HTMLImageElement | HTMLScriptElement | HTMLIFrameElement>("img[src], script[src], iframe[src]")].filter(
+          (e) => e.getAttribute("src")?.startsWith("http://"),
+        ).length
+      : 0;
+
   return {
     protocol: location.protocol,
     forms,
@@ -66,6 +93,10 @@ function signals() {
     maxInputsInOneForm: Math.max(looseInputs, ...[...document.forms].map(textInputs), 0),
     downloadLinks,
     scriptHosts,
+    hiddenFrameHosts: [...new Set(hiddenFrameHosts)],
+    obfuscatedScripts,
+    metaRefresh,
+    mixedContent,
   };
 }
 

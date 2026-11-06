@@ -33,3 +33,14 @@ describe("Content Credentials", () => {
     expect(titles(null)).toEqual(["info: Checked 1 image for Content Credentials: 0 had them"]);
   });
 });
+
+describe("AI tool markers in plain image metadata", () => {
+  it("spots common AI generators and ignores normal photos", async () => {
+    const { aiMetadataMarker } = await import("../src/index.js");
+    const enc = (s: string) => new TextEncoder().encode(`\xff\xd8 exif header ${s} more bytes`);
+    expect(aiMetadataMarker(enc("<Iptc4xmpExt:DigitalSourceType>http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"))).toMatch(/AI model/);
+    expect(aiMetadataMarker(enc("Software: Midjourney v6"))).toBe("Midjourney");
+    expect(aiMetadataMarker(enc("Made with Google AI"))).toBe("Google AI");
+    expect(aiMetadataMarker(enc("Canon EOS R5 Software: Adobe Lightroom"))).toBeUndefined();
+  });
+});

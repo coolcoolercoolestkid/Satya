@@ -173,3 +173,40 @@ export function credentialFindings(creds: ImageCredential[], imagesChecked: numb
   }
   return findings;
 }
+
+/**
+ * Plain (unsigned) metadata that AI tools write into images: IPTC's digital source type, and
+ * generator names in EXIF/XMP/PNG text. Weaker than Content Credentials (anyone can edit or strip
+ * it), so it's shown as "the file says", never as proof.
+ */
+const AI_MARKERS: [RegExp, string][] = [
+  [/trainedAlgorithmicMedia/, "an AI model (IPTC digital source type)"],
+  [/compositeWithTrainedAlgorithmicMedia/, "AI editing (IPTC digital source type)"],
+  [/Made with Google AI|Google AI\b/i, "Google AI"],
+  [/Midjourney/i, "Midjourney"],
+  [/DALL[·\-.]?E|OpenAI/i, "OpenAI DALL·E"],
+  [/Stable Diffusion|stability\.ai|sd-webui|ComfyUI/i, "Stable Diffusion"],
+  [/Adobe Firefly/i, "Adobe Firefly"],
+  [/Imagen\b/i, "Google Imagen"],
+  [/Leonardo\.Ai|leonardo\.ai/i, "Leonardo.Ai"],
+  [/Ideogram/i, "Ideogram"],
+  [/Bing Image Creator|Microsoft Designer/i, "Microsoft Designer"],
+];
+
+/** Looks for AI-tool markers in the first part of an image file. Returns the tool, if any. */
+export function aiMetadataMarker(bytes: Uint8Array): string | undefined {
+  const head = new TextDecoder("latin1").decode(bytes.subarray(0, 256 * 1024));
+  for (const [re, name] of AI_MARKERS) if (re.test(head)) return name;
+  return undefined;
+}
+
+export function metadataFindings(marks: { url: string; tool: string }[]): Finding[] {
+  return marks.map((m) => ({
+    check: "ai" as const,
+    severity: "info" as const,
+    title: `Image "${fileName(m.url)}" says it was made with ${m.tool}`,
+    detail: "Its file metadata names an AI tool. This metadata isn't signed, so it's a strong hint, not proof.",
+    source: "Image file metadata (EXIF / XMP / IPTC)",
+    weight: 0,
+  }));
+}

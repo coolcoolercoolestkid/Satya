@@ -1,0 +1,30 @@
+# Keeps Satya's scam registry on Arkiv current. Once a day it downloads each official list,
+# and re-publishes only the lists whose file changed or whose 7-day records are due for renewal.
+# Needs the repository secret SATYA_PUBLISHER_KEY (the publisher wallet, funded with test GLM)
+# and, optionally, ARKIV_ACCESS_KEY.
+name: Arkiv registry refresh
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # 07:00 IST every day
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refresh changed or due lists
+        env:
+          SATYA_PUBLISHER_KEY: ${{ secrets.SATYA_PUBLISHER_KEY }}
+          ARKIV_ACCESS_KEY: ${{ secrets.ARKIV_ACCESS_KEY }}
+        run: pnpm --filter @satya/registry publish-registry refresh

@@ -1,4 +1,4 @@
-import { analyzePage, buildEvidence, credentialFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
+import { analyzePage, buildEvidence, credentialFindings, metadataFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
 import { checkIdentity, defaultIdentityDeps, ensNamesOnPage } from "@satya/identity";
 import { checkRegistry, type RegistryResult } from "@satya/registry";
 import { useCallback, useEffect, useState } from "react";
@@ -14,15 +14,6 @@ declare const __BUILD_TIME__: string;
 const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
-const GROUPS: [Finding["check"], string][] = [
-  ["phishing", "Is this site real?"],
-  ["page", "What is it asking for?"],
-  ["scam", "What is it saying?"],
-  ["records", "Past records"],
-  ["identity", "Who is this?"],
-  ["ai", "AI content · not part of the score"],
-];
-const GLYPH: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "·", good: "✓" };
 const STAMP: Record<CredibilityResult["level"], string> = {
   trustworthy: "Verified",
   unverified: "No red flags",
@@ -30,10 +21,10 @@ const STAMP: Record<CredibilityResult["level"], string> = {
   "high-risk": "Flagged",
 };
 const MEANING: Record<CredibilityResult["level"], string> = {
-  trustworthy: "Something independent vouches for this site, and nothing wrong was found.",
-  unverified: "Nothing wrong was found, but nothing proves this site is legitimate either.",
-  careful: "Some warning signs. Don't enter passwords, OTPs or card details without checking.",
-  "high-risk": "Strong signs of a scam. Don't pay, log in or type anything here.",
+  trustworthy: "Independent evidence vouches for this site.",
+  unverified: "Nothing wrong found, but nothing vouches for it yet.",
+  careful: "Warning signs. Don't enter passwords, OTPs or card details.",
+  "high-risk": "Likely a scam. Don't pay, log in or type anything here.",
 };
 
 async function activeTab() {
@@ -60,127 +51,84 @@ interface Done {
   page: SnapshotResponse;
   registry: RegistryResult;
   images?: ImageCheck;
-  checkedAt: Date;
 }
 type State = { status: "loading" } | { status: "unsupported"; url?: string } | Done;
 
-const short = (h: string, n = 6) => (h.length > 2 * n + 2 ? `${h.slice(0, n + 2)}…${h.slice(-n)}` : h);
+const short = (h: string, n = 4) => (h.length > 2 * n + 2 ? `${h.slice(0, n + 2)}…${h.slice(-n)}` : h);
+/** The source without the long "mirrored on Arkiv…" tail: the pointer stays short. */
+const shortSource = (s: string) => s.replace(/, mirrored on Arkiv.*$/, " · Arkiv").replace(/^Satya /, "");
 
-function Seal({ result }: { result: CredibilityResult }) {
+function Pointer({ f, tabId }: { f: Finding; tabId: number }) {
+  const sign = f.severity === "good" ? "+" : "−";
   return (
-    <div className={`seal ${result.level}`} aria-label={`Score ${result.score} out of 100`}>
-      <div>
-        <div className="seal-score">{result.score}</div>
-        <div className="seal-of">of 100</div>
-      </div>
-    </div>
-  );
-}
-
-function Line({ f, tabId }: { f: Finding; tabId: number }) {
-  return (
-    <li className={`line ${f.severity}`}>
-      <span className="glyph" aria-hidden>{GLYPH[f.severity]}</span>
-      <div className="line-body">
-        <div className="line-title">{f.title}</div>
-        {f.detail && <div className="line-detail">{f.detail}</div>}
-        {f.evidence && (
-          <button className="quote" onClick={() => sendToTab(tabId, { type: "scrollTo", evidence: f.evidence! })} title="Show on the page">
-            “{f.evidence.length > 140 ? `${f.evidence.slice(0, 140)}…` : f.evidence}”
+    <li className={`ptr ${f.severity}`} title={f.detail}>
+      <span className="ptr-dot" aria-hidden />
+      <div className="ptr-body">
+        <span className="ptr-title">{f.title}</span>
+        {f.evidence && f.check !== "phishing" && (
+          <button className="ptr-quote" onClick={() => sendToTab(tabId, { type: "scrollTo", evidence: f.evidence! })} title="Show on the page">
+            “{f.evidence.length > 70 ? `${f.evidence.slice(0, 70)}…` : f.evidence}”
           </button>
         )}
-        <div className="line-source">src · {f.source}</div>
+        <span className="ptr-src">{shortSource(f.source)}</span>
       </div>
-      {f.weight > 0 && f.check !== "ai" && <span className="points">−{f.weight}</span>}
+      {f.weight > 0 && f.check !== "ai" && f.check !== "identity" && (
+        <span className={`ptr-pts ${f.severity}`}>{sign}{f.weight}</span>
+      )}
     </li>
   );
 }
 
-/** The part that shows the work: what was hashed, what Arkiv was asked, which records answered. */
-function Proof({ s }: { s: Done }) {
+function Section({ title, items, tabId }: { title: string; items: Finding[]; tabId: number }) {
+  if (!items.length) return null;
   return (
-    <section className="proof">
-      <div className="eyebrow">How this was verified</div>
+    <section className="sec">
+      <div className="eyebrow">{title}</div>
+      <ul>{items.map((f, i) => <Pointer key={i} f={f} tabId={tabId} />)}</ul>
+    </section>
+  );
+}
+
+/** Collapsed by default: what was hashed, what Arkiv was asked, which records answered. */
+function HowChecked({ s, notes }: { s: Done; notes: Finding[] }) {
+  return (
+    <details className="how">
+      <summary>How this was checked</summary>
       {s.registry.reachable ? (
         s.registry.lookups.map((l) => (
-          <div key={l.kind + l.value} className="proof-block">
-            <div className="hash">
-              sha256(<b>{l.value}</b>) → bucket <b>{l.bucket}</b>
-            </div>
-            <div className="proof-note">
-              Only “{l.bucket}” was sent to Arkiv. The {l.kind === "domain" ? "site" : "wallet"} itself never left this computer.
-            </div>
-            <ul className="records">
-              {l.records.map((r) => (
-                <li key={r.key} className={r.matched ? "hit" : ""}>
-                  <span className="rec-mark">{r.matched ? "MATCH" : "clear"}</span>
-                  <span className="rec-label">{r.label}</span>
-                  <span className="rec-meta">
-                    {r.entries.toLocaleString()} hashed entries · {r.date} ·{" "}
-                    <a href={`${EXPLORER}/entity/${r.key}`} target="_blank" rel="noreferrer">record {short(r.key, 4)} ↗</a>
-                  </span>
-                </li>
-              ))}
-              {!l.records.length && <li className="rec-meta">No registry records for this bucket.</li>}
-            </ul>
+          <div key={l.kind + l.value} className="how-block">
+            <div className="mono">sha256({l.value}) → bucket {l.bucket}</div>
+            <div className="how-note">Only “{l.bucket}” was sent to Arkiv; matching ran on this computer.</div>
+            {l.records.map((r) => (
+              <div key={r.key} className={`rec ${r.matched ? "hit" : ""}`}>
+                <b>{r.matched ? "MATCH" : "clear"}</b> {r.label} · {r.entries.toLocaleString()} entries · {r.date} ·{" "}
+                <a href={`${EXPLORER}/entity/${r.key}`} target="_blank" rel="noreferrer">{short(r.key)} ↗</a>
+              </div>
+            ))}
           </div>
         ))
       ) : (
-        <div className="proof-note">Arkiv couldn't be reached, so the copy of the lists bundled with Satya was used instead.</div>
+        <div className="how-note">Arkiv unreachable: used the lists bundled with Satya.</div>
       )}
-      <div className="proof-block">
-        <div className="proof-note">
-          <b>On this computer:</b> lookalike domains, scam wording, risky forms (OTP, UPI PIN, card, seed phrase), gov/bank
-          domain rules.
+      {s.deep && s.images && (
+        <div className="how-note">
+          Images: {s.images.found} found, {s.images.checked} read, {s.images.creds.length} with Content Credentials.
+          {s.images.errors.map((e) => <div key={e} className="err">⚠ {e}</div>)}
         </div>
-        {s.deep ? (
-          <div className="proof-note">
-            <b>Deeper check:</b> domain age from rdap.org, certificates from Cert Spotter
-            {s.ensNames ? ", ENS names and proofs from Ethereum and Arkiv" : ""}.{" "}
-            {s.images && (
-              <>
-                Images: {s.images.found} found, {s.images.checked} read, {s.images.creds.length} with Content Credentials.
-                {s.images.found === 0 && " (If this page has large images, reload the page so Satya's page reader updates.)"}
-              </>
-            )}
-            {s.images?.errors.map((e) => (
-              <div key={e} className="proof-error">⚠ {e}</div>
-            ))}
-          </div>
-        ) : (
-          <div className="proof-note"><b>Not run yet:</b> domain age, certificates, image Content Credentials, ENS proofs.</div>
-        )}
-      </div>
-    </section>
+      )}
+      {notes.map((f, i) => (
+        <div key={i} className="how-note">· {f.title}</div>
+      ))}
+      <div className="how-note">Score = 50 + trust − risk. On a scam list: at most 5. Impersonating a brand: at most 15.</div>
+    </details>
   );
 }
 
-function DeeperCheck({ ensNames, onRun }: { ensNames: number; onRun: () => void }) {
-  return (
-    <section className="action">
-      <button className="btn" onClick={onRun}>Run deeper check</button>
-      <p className="fine">
-        Sends the site's domain to rdap.org (age) and Cert Spotter (certificates), re-reads this page's larger images from
-        the sites that served them to read Content Credentials
-        {ensNames ? `, and the ${ensNames} ENS name${ensNames > 1 ? "s" : ""} on this page to an Ethereum node and Arkiv` : ""}.
-        Those services can see your IP address.
-      </p>
-    </section>
-  );
-}
-
-/**
- * Freezes the page as evidence: its text, a screenshot and Satya's findings go into a file the
- * user keeps. Only the file's fingerprint (a SHA-256 hash) is anchored on Arkiv, from the web
- * app with the user's own wallet, so nobody learns which page it was.
- */
-function SaveEvidence({ s }: { s: Done }) {
+function Actions({ s, onDeep }: { s: Done; onDeep: () => void }) {
   const [saved, setSaved] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
   const save = async () => {
     setBusy(true);
-    setError(undefined);
     try {
       const screenshot = await chrome.tabs.captureVisibleTab(s.windowId, { format: "png" }).catch(() => null);
       const ev = await buildEvidence({
@@ -192,75 +140,74 @@ function SaveEvidence({ s }: { s: Done }) {
         label: s.result.label,
         findings: s.result.findings.filter((f) => f.severity === "danger" || f.severity === "warning").map((f) => f.title),
       });
-      const blob = new Blob([JSON.stringify(ev, null, 1)], { type: "application/json" });
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(ev, null, 1)], { type: "application/json" }));
       a.download = `satya-evidence-${s.host}-${ev.header.capturedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
       a.click();
       setSaved(ev.fingerprint);
-      if (!screenshot) setError("Saved without a screenshot (Chrome didn't allow capturing this tab).");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <section className="action">
-      <button className="btn ghost" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : "Save evidence"}</button>
-      <p className="fine">
-        Scam pages vanish fast. Saves the page text, a screenshot and this receipt to a file on your computer. Anchor its
-        fingerprint on Arkiv (only the hash, never the page) to prove later that it existed, unchanged.
-      </p>
+    <section className="actions">
+      <div className="row">
+        {!s.deep && (
+          <button
+            className="btn"
+            onClick={onDeep}
+            title={`Sends the domain to its registry (age), Cert Spotter (certificates) and the Internet Archive (history), and re-reads page images for Content Credentials${s.ensNames ? ", plus ENS names to Ethereum/Arkiv" : ""}.`}
+          >
+            Deeper check
+          </button>
+        )}
+        <button className="btn ghost" onClick={() => void save()} disabled={busy} title="Save the page text, a screenshot and this receipt to a file; anchor only its fingerprint on Arkiv.">
+          {busy ? "Saving…" : "Save evidence"}
+        </button>
+      </div>
+      {!s.deep && <div className="hint">Deeper check adds age, certificate, history and image checks. Off by default for privacy.</div>}
       {saved && (
-        <div className="saved">
-          <div className="eyebrow">Evidence fingerprint</div>
-          <div className="hash">{saved}</div>
-          <a className="btn small" href={`${__SATYA_WEB_URL__}/#evidence=${saved}`} target="_blank" rel="noreferrer">Anchor on Arkiv →</a>
+        <div className="hint">
+          Saved · <span className="mono">{saved.slice(0, 12)}…</span>{" "}
+          <a href={`${__SATYA_WEB_URL__}/#evidence=${saved}`} target="_blank" rel="noreferrer">anchor on Arkiv →</a>
         </div>
       )}
-      {error && <p className="fine warn">{error}</p>}
     </section>
   );
 }
 
-function Receipt({ s }: { s: Done }) {
+function Receipt({ s, onDeep }: { s: Done; onDeep: () => void }) {
   const { result } = s;
-  const shown = result.findings.filter((f) => !(f.check === "records" && f.title.startsWith("Checked privately")));
+  const wrong = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && (f.severity === "danger" || f.severity === "warning"));
+  const vouches = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && f.severity === "good");
+  const ai = result.findings.filter((f) => f.check === "ai" && !f.title.startsWith("Checked "));
+  const people = result.findings.filter((f) => f.check === "identity" && f.severity !== "info");
+  const notes = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && f.severity === "info");
   return (
-    <article className="receipt">
-      <div className="receipt-head">
-        <div className="eyebrow">Satya · Site receipt</div>
+    <>
+      <article className="receipt">
         <div className="site">{s.host}</div>
-        <div className="meta">
-          {s.checkedAt.toLocaleString()} · {s.deep ? "deeper check" : "private check"}
+        <div className="verdict">
+          <div className={`seal ${result.level}`}>
+            <div>
+              <div className="seal-score">{result.score}</div>
+              <div className="seal-of">/ 100</div>
+            </div>
+          </div>
+          <div>
+            <span className={`stamp ${result.level}`}>{STAMP[result.level]}</span>
+            <p className="meaning">{MEANING[result.level]}</p>
+          </div>
         </div>
-      </div>
-      <div className="verdict">
-        <Seal result={result} />
-        <div className="verdict-text">
-          <span className={`stamp ${result.level}`}>{STAMP[result.level]}</span>
-          <p>{MEANING[result.level]}</p>
-        </div>
-      </div>
-      <hr className="dash" />
-      {GROUPS.map(([check, name]) => {
-        const items = shown.filter((f) => f.check === check);
-        if (!items.length) return null;
-        return (
-          <section key={check} className="group">
-            <div className="eyebrow">{name}</div>
-            <ul>{items.map((f, i) => <Line key={i} f={f} tabId={s.tabId} />)}</ul>
-          </section>
-        );
-      })}
-      {!shown.length && <p className="fine">No warnings on this page. That isn't a guarantee: stay careful with money and passwords.</p>}
-      <hr className="dash" />
-      <Proof s={s} />
-      <div className="receipt-foot">
-        Score = 100 − the points shown above. Every point comes from a line with its source.
-      </div>
-    </article>
+        <Section title={wrong.length ? `What's wrong (${wrong.length})` : "What's wrong"} items={wrong} tabId={s.tabId} />
+        {!wrong.length && <p className="none">Nothing wrong found on this page.</p>}
+        <Section title="What vouches for it" items={vouches} tabId={s.tabId} />
+        <Section title="People on this page" items={people} tabId={s.tabId} />
+        <Section title="AI content · not scored" items={ai} tabId={s.tabId} />
+        <HowChecked s={s} notes={notes} />
+      </article>
+      <Actions s={s} onDeep={onDeep} />
+    </>
   );
 }
 
@@ -294,10 +241,12 @@ function App() {
       analyzePage(page, { ...localCtx, network: deep }),
       deep ? checkIdentity(page, identityDeps).catch(() => [] as Finding[]) : Promise.resolve([] as Finding[]),
       deep
-        ? checkImageCredentials(page.images ?? []).catch((e): ImageCheck => ({ creds: [], found: 0, checked: 0, errors: [String(e)] }))
+        ? checkImageCredentials(page.images ?? []).catch((e): ImageCheck => ({ creds: [], found: 0, checked: 0, errors: [String(e)], metadata: [] }))
         : Promise.resolve(undefined),
     ]);
-    const imageFindings = images ? credentialFindings(images.creds, images.checked) : [];
+    const imageFindings = images
+      ? [...credentialFindings(images.creds, images.checked), ...metadataFindings(images.metadata.filter((m) => !images.creds.some((c) => c.url === m.url)))]
+      : [];
     const result = scoreFindings([...base.findings, ...registry.findings, ...identity, ...imageFindings]);
     setState({
       status: "done",
@@ -310,12 +259,11 @@ function App() {
       page,
       registry,
       images,
-      checkedAt: new Date(),
     });
     await sendToTab(tab.id, {
       type: "highlight",
       items: result.findings
-        .filter((f) => f.evidence && f.check !== "phishing" && f.severity !== "good" && !(f.check === "identity" && f.severity === "info"))
+        .filter((f) => f.evidence && f.check !== "phishing" && (f.severity === "danger" || f.severity === "warning"))
         .map((f) => ({ evidence: f.evidence!, severity: f.severity, title: f.title })),
     });
   }, []);
@@ -337,28 +285,15 @@ function App() {
   return (
     <main>
       <header className="top">
-        <div className="brand">
-          Satya <span className="brand-hi">सत्य</span>
-        </div>
+        <div className="brand">Satya <span className="brand-hi">सत्य</span></div>
         <button className="icon" onClick={() => void run(false)} aria-label="Re-check this page" title="Re-check">↻</button>
       </header>
-      {state.status === "loading" && <div className="receipt loading"><div className="eyebrow">Checking this page…</div></div>}
+      {state.status === "loading" && <div className="receipt loading"><div className="eyebrow">Checking…</div></div>}
       {state.status === "unsupported" && (
-        <div className="receipt">
-          <p className="fine">
-            Open a website to check it. Browser pages and the Chrome Web Store can't be checked. If you just installed or
-            reloaded Satya, reload the page too.
-          </p>
-        </div>
+        <div className="receipt"><p className="none">Open a website to check it. If you just reloaded Satya, reload the page too.</p></div>
       )}
-      {state.status === "done" && (
-        <>
-          <Receipt s={state} />
-          {!state.deep && <DeeperCheck ensNames={state.ensNames} onRun={() => void run(true)} />}
-          <SaveEvidence s={state} />
-        </>
-      )}
-      <footer className="build">Satya build {__BUILD_TIME__} · no trackers · no Satya server</footer>
+      {state.status === "done" && <Receipt s={state} onDeep={() => void run(true)} />}
+      <footer className="build">build {__BUILD_TIME__}</footer>
     </main>
   );
 }

@@ -14,6 +14,11 @@ const ORDER: Record<Finding["severity"], number> = { danger: 0, warning: 1, info
  * - AI-content findings (AI-written text, AI images) are shown separately and never change the
  *   score: AI-made content isn't a scam by itself.
  */
+/** An unknown site starts in the middle: no evidence either way. */
+export const BASE = 50;
+/** Findings that mean the site is on a published phishing, scam, fraud or sanctions list. */
+const LISTED = /^(Known phishing site|Listed as a (scam|fraud|ransomware) site|Wallet on )/;
+
 export function scoreFindings(findings: Finding[]): CredibilityResult {
   const seen = new Set<string>();
   const unique = findings.filter((f) => {
@@ -23,23 +28,29 @@ export function scoreFindings(findings: Finding[]): CredibilityResult {
     return true;
   });
 
-  const counted = unique.filter((f) => f.check !== "ai");
-  const penalty = counted
-    .filter((f) => f.severity !== "good")
-    .reduce((sum, f) => sum + f.weight, 0);
-  let score = Math.max(0, Math.min(100, 100 - penalty));
+  // Site trust only: AI content and people's proofs are shown but don't move it.
+  const counted = unique.filter((f) => f.check !== "ai" && f.check !== "identity");
+  const trust = counted.filter((f) => f.severity === "good").reduce((sum, f) => sum + f.weight, 0);
+  const risk = counted.filter((f) => f.severity === "danger" || f.severity === "warning").reduce((sum, f) => sum + f.weight, 0);
+  let score = BASE + trust - risk;
 
+  // Decisive evidence overrides the sum.
+  const onList = counted.some((f) => f.severity === "danger" && LISTED.test(f.title));
+  const lookalike = counted.some((f) => f.severity === "danger" && /^Looks like .+, but isn't$/.test(f.title));
   const hasDanger = counted.some((f) => f.severity === "danger");
-  const vouched = counted.some((f) => f.severity === "good" && f.check !== "identity");
-  const isOfficial = unique.some((f) => f.check === "phishing" && f.severity === "good");
-  if (hasDanger) score = Math.min(score, 60);
-  else if (isOfficial) score = Math.max(score, 85);
+  const official = counted.some((f) => f.check === "phishing" && f.severity === "good");
+  if (onList) score = Math.min(score, 5);
+  else if (lookalike) score = Math.min(score, 15);
+  else if (hasDanger) score = Math.min(score, 35);
+  else if (official) score = Math.max(score, 90);
+  score = Math.round(Math.max(0, Math.min(100, score)));
 
   const level: CredibilityResult["level"] =
-    score >= 75 ? (vouched ? "trustworthy" : "unverified") : score >= 45 ? "careful" : "high-risk";
+    score >= 75 ? "trustworthy" : score >= 45 ? "unverified" : score >= 25 ? "careful" : "high-risk";
+  const hasWarning = counted.some((f) => f.severity === "warning");
   const label = {
     trustworthy: "Looks trustworthy",
-    unverified: "No red flags found",
+    unverified: hasWarning ? "Mixed signals" : trust > 0 ? "Probably fine" : "No red flags found",
     careful: "Be careful",
     "high-risk": "High risk",
   }[level];
