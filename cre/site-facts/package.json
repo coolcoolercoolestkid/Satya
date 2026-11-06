@@ -1,0 +1,17 @@
+{
+  "name": "satya-site-facts",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "postinstall": "bunx cre-setup"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@chainlink/cre-sdk": "^1.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.21",
+    "typescript": "^5.6.3"
+  }
+}

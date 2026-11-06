@@ -1,0 +1,12 @@
+{
+  "rdapBases": {
+    "com": "https://rdap.verisign.com/com/v1/",
+    "net": "https://rdap.verisign.com/net/v1/",
+    "org": "https://rdap.publicinterestregistry.org/rdap/",
+    "info": "https://rdap.identitydigital.services/rdap/",
+    "app": "https://pubapi.registry.google/rdap/",
+    "dev": "https://pubapi.registry.google/rdap/",
+    "xyz": "https://rdap.centralnic.com/xyz/",
+    "in": "https://rdap.nixiregistry.in/rdap/"
+  }
+}
