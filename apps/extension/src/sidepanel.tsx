@@ -5,7 +5,8 @@ declare const __ARKIV_ACCESS_KEY__: string;
 const identityDeps = defaultIdentityDeps(__ARKIV_ACCESS_KEY__);
 import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { detectorFor, getSettings, reviewerFor, loadContext, saveSettings, type Settings } from "./data";
+import { checkRegistry } from "@satya/registry";
+import { BUNDLED_TO_REGISTRY, cachedBucket, detectorFor, getSettings, reviewerFor, loadContext, saveSettings, type Settings } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
 const ICON: Record<Finding["severity"], string> = { danger: "✕", warning: "!", info: "i", good: "✓" };
@@ -113,12 +114,38 @@ function App() {
       setState({ status: "unsupported", url: tab.url });
       return;
     }
-    const [ctx, settings] = await Promise.all([loadContext(), getSettings()]);
+    const [ctx, settings, registry] = await Promise.all([loadContext(), getSettings(), checkRegistry(page, cachedBucket)]);
+    // Lists the Arkiv registry answered for are not checked again from the bundled copy.
+    const covered = new Set([...registry.covered.domain, ...registry.covered.address]);
+    const localCtx = {
+      ...ctx,
+      phishing: { ...ctx.phishing, lists: ctx.phishing.lists.filter((l) => !covered.has(BUNDLED_TO_REGISTRY[l.source] ?? "")) },
+      addressLists: registry.covered.address.includes("*")
+        ? []
+        : (ctx.addressLists ?? []).filter((l) => !covered.has(BUNDLED_TO_REGISTRY[l.source] ?? "")),
+    };
+    const registryNote: Finding = registry.reachable
+      ? {
+          check: "records",
+          severity: "info",
+          title: "Checked privately against Satya's registry on Arkiv",
+          detail: `Arkiv was only asked for bucket ${registry.bucketsAsked.join(", ") || "none"} (1/256 of all sites each). It never saw this site's address. Matching happened on your computer.`,
+          source: "Satya scam registry on Arkiv",
+          weight: 0,
+        }
+      : {
+          check: "records",
+          severity: "info",
+          title: "Couldn't reach Satya's registry on Arkiv",
+          detail: "Used the copy of the lists bundled with the extension instead.",
+          source: "Satya scam registry on Arkiv",
+          weight: 0,
+        };
     const [base, identity] = await Promise.all([
-      analyzePage(page, { ...ctx, aiDetector: detectorFor(settings), reviewer: reviewerFor(settings) }),
+      analyzePage(page, { ...localCtx, aiDetector: detectorFor(settings), reviewer: reviewerFor(settings) }),
       checkIdentity(page, identityDeps).catch(() => [] as Finding[]),
     ]);
-    const result = scoreFindings([...base.findings, ...identity]);
+    const result = scoreFindings([...base.findings, ...registry.findings, registryNote, ...identity]);
     setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id });
     await sendToTab(tab.id, {
       type: "highlight",

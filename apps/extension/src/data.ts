@@ -9,6 +9,7 @@ import {
   type DomainList,
   type PageReviewer,
 } from "@satya/checks";
+import { fetchBucket, SATYA_PUBLISHER, type BucketFetcher, type BucketRecord } from "@satya/registry";
 
 interface DomainListFile {
   source: string;
@@ -97,3 +98,36 @@ export function detectorFor(s: Settings): AiDetector | undefined {
 export function reviewerFor(s: Settings): PageReviewer | undefined {
   return s.claudeKey ? claudeReviewer(s.claudeKey, { browser: true }) : undefined;
 }
+
+// ---------- Satya's scam registry on Arkiv ----------
+
+declare const __ARKIV_ACCESS_KEY__: string;
+
+/** Bundled list name → registry source id, so a list the registry covers isn't checked twice. */
+export const BUNDLED_TO_REGISTRY: Record<string, string> = {
+  "MetaMask phishing list": "metamask-phishing",
+  "US Treasury OFAC sanctions list": "ofac-sdn",
+};
+
+const BUCKET_CACHE_MS = 6 * 60 * 60 * 1000;
+
+interface CachedBucket {
+  at: number;
+  records: (Omit<BucketRecord, "hashes"> & { hashes: string[] })[];
+}
+
+/**
+ * Fetches one registry bucket from Arkiv, cached in this browser for 6 hours. A cached
+ * bucket means no request at all, so repeat visits to sites in the same bucket send nothing.
+ */
+export const cachedBucket: BucketFetcher = async (bucket) => {
+  const key = `registry:${bucket}`;
+  const hit = (await chrome.storage.local.get(key))[key] as CachedBucket | undefined;
+  if (hit && Date.now() - hit.at < BUCKET_CACHE_MS) {
+    return hit.records.map((r) => ({ ...r, hashes: new Set(r.hashes) }));
+  }
+  const records = await fetchBucket(bucket, SATYA_PUBLISHER, __ARKIV_ACCESS_KEY__);
+  const store: CachedBucket = { at: Date.now(), records: records.map((r) => ({ ...r, hashes: [...r.hashes] })) };
+  await chrome.storage.local.set({ [key]: store });
+  return records;
+};
