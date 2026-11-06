@@ -53,3 +53,4 @@ export async function analyzePage(page: PageSnapshot, ctx: AnalyzeContext): Prom
   return scoreFindings(findings);
 }
 export * from "./credentials.js";
+export * from "./evidence.js";

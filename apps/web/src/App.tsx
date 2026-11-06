@@ -10,10 +10,11 @@ import {
 import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { AadhaarTab } from "./AadhaarTab";
+import { EvidenceTab } from "./EvidenceTab";
 import { loadVerifiedProofs, type CheckedProof } from "./proofs";
 import { ARKIV_EXPLORER, ARKIV_FAUCET, ARKIV_KEY, connect, ensNameOf, ensText, provider, resolveTarget, short } from "./wallet";
 
-type Tab = "verify" | "aadhaar" | "link" | "check" | "company";
+type Tab = "verify" | "aadhaar" | "link" | "check" | "company" | "evidence";
 
 const PERSONAS: { label: string; doc: DocumentDetails }[] = [
   { label: "Adult · India", doc: { dateOfBirth: "1999-04-12", nationality: "IN", documentExpiry: "2031-06-30" } },
@@ -287,7 +288,9 @@ function CompanyDemo({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
 
 export function App() {
   const wallet = useWallet();
-  const [tab, setTab] = useState<Tab>(() => (location.hash.slice(1) as Tab) || "verify");
+  // The extension links here as #evidence=<fingerprint>; keep the fingerprint before the hash changes.
+  const [evidenceFp] = useState(() => /^#evidence=([0-9a-f]{64})$/.exec(location.hash)?.[1]);
+  const [tab, setTab] = useState<Tab>(() => (evidenceFp ? "evidence" : (location.hash.slice(1) as Tab)) || "verify");
   useEffect(() => {
     location.hash = tab;
   }, [tab]);
@@ -297,6 +300,7 @@ export function App() {
     ["link", "Link profiles"],
     ["check", "Check anyone"],
     ["company", "Verify with Satya"],
+    ["evidence", "Scam evidence"],
   ];
   return (
     <main>
@@ -324,6 +328,7 @@ export function App() {
       {tab === "link" && <LinkProfile wallet={wallet} />}
       {tab === "check" && <CheckSomeone />}
       {tab === "company" && <CompanyDemo wallet={wallet} />}
+      {tab === "evidence" && <EvidenceTab address={wallet.address} connect={wallet.connect} initial={evidenceFp} />}
       <footer className="muted small">
         Claims come from a demo issuer standing in for DigiLocker, or from Anon Aadhaar test cards. Records live on Arkiv's testnet. No trackers, no
         Satya server.

@@ -51,6 +51,8 @@ export interface SourceInfo {
   label: string;
   /** Licence or legal basis for republishing. */
   licence: string;
+  /** How a match is shown. Defaults: danger, 70 points, "Known phishing site" / "Wallet on …". */
+  match?: { severity: "danger" | "warning"; weight: number; title: string };
 }
 
 export const SOURCES: Record<string, SourceInfo> = {
@@ -65,6 +67,45 @@ export const SOURCES: Record<string, SourceInfo> = {
     type: "domain",
     label: "MetaMask eth-phishing-detect",
     licence: "DBAD Public License 1.2 (reuse allowed with attribution)",
+  },
+  "phishing-database": {
+    id: "phishing-database",
+    type: "domain",
+    label: "Phishing.Database (active phishing domains)",
+    licence: "MIT",
+    match: { severity: "danger", weight: 70, title: "Known phishing site" },
+  },
+  "blp-scam": {
+    id: "blp-scam",
+    type: "domain",
+    label: "Block List Project scam list",
+    licence: "MIT (list header); repository Unlicense",
+    match: { severity: "danger", weight: 60, title: "Listed as a scam site" },
+  },
+  "blp-fraud": {
+    id: "blp-fraud",
+    type: "domain",
+    label: "Block List Project fraud list",
+    licence: "MIT (list header); repository Unlicense",
+    match: { severity: "danger", weight: 60, title: "Listed as a fraud site" },
+  },
+  "blp-ransomware": {
+    id: "blp-ransomware",
+    type: "domain",
+    label: "Block List Project ransomware list",
+    licence: "MIT (list header); repository Unlicense",
+    match: { severity: "danger", weight: 70, title: "Listed as a ransomware site" },
+  },
+  "blp-piracy": {
+    id: "blp-piracy",
+    type: "domain",
+    label: "Block List Project piracy list",
+    licence: "MIT (list header); repository Unlicense",
+    match: {
+      severity: "warning",
+      weight: 15,
+      title: "Listed as a piracy / illegal streaming site",
+    },
   },
 };
 
@@ -93,16 +134,33 @@ export const normalizeAddress = (a: string) => a.trim().toLowerCase();
  * bucket.)
  */
 export const SHARED_HOST_SUFFIXES = [
-  ...new Set([...FREE_HOSTS, "wixstudio.com", "gitbook.io", "typedream.app", "workers.dev", "arweave.net", "godaddysites.com"]),
+  ...new Set([
+    ...FREE_HOSTS,
+    // Hosting, dynamic DNS and gateway services where each subdomain is a separate owner.
+    "wixstudio.com", "gitbook.io", "typedream.app", "workers.dev", "arweave.net", "godaddysites.com",
+    "duckdns.org", "appspot.com", "weeblysite.com", "r2.dev", "dweb.link", "square.site", "my.id", "biz.id",
+    "xsph.ru", "swtest.ru", "co.vu", "plesk.page", "pantheonsite.io", "cf-ipfs.com", "cprapid.com",
+    "amazonaws.com", "ddns.net", "webcindario.com", "azurewebsites.net", "tw1.ru", "ewp.live", "tmweb.ru",
+    "usrfiles.com", "appdomain.cloud", "trycloudflare.com", "teachable.com", "filesusr.com", "yolasite.com",
+    "nftstorage.link", "w3s.link", "surge.sh", "infura-ipfs.io", "ipfs.io", "gitlab.io", "ngrok-free.app",
+    "ngrok.io", "fly.dev", "deno.dev", "no-ip.org", "hopto.org", "zapto.org", "sytes.net", "myshopify.com",
+    "wordpress.com", "notion.site", "jimdosite.com", "mystrikingly.com", "site123.me", "webnode.page",
+    "r.appspot.com", "ipfs.dweb.link", "ipfs.cf-ipfs.com", "ipfs.nftstorage.link", "ipfs.w3s.link",
+    "ipfs.infura-ipfs.io", "temp.swtest.ru", "cloud-object-storage.appdomain.cloud", "atwebpages.com",
+  ]),
 ].sort((a, b) => b.length - a.length);
 
 /** The site a domain belongs to: its registrable domain, or one label under a shared host. */
 export function siteOf(domain: string): string {
   const h = normalizeDomain(domain);
-  const shared = SHARED_HOST_SUFFIXES.find((s) => h.endsWith(`.${s}`));
+  const blogspot = /\.(blogspot\.[a-z]{2,3}(\.[a-z]{2})?)$/.exec(h)?.[1];
+  const shared = SHARED_HOST_SUFFIXES.find((s) => h.endsWith(`.${s}`)) ?? blogspot;
   if (shared) {
-    const rest = h.slice(0, -(shared.length + 1));
-    return `${rest.slice(rest.lastIndexOf(".") + 1)}.${shared}`;
+    const labels = h.slice(0, -(shared.length + 1)).split(".");
+    // One label under the host is the site ("scam.pages.dev"). Some hosts put a short region
+    // label in between ("project.uc.r.appspot.com"), so then take one more.
+    const take = labels.length > 1 && labels[labels.length - 1]!.length <= 3 ? 2 : 1;
+    return `${labels.slice(-take).join(".")}.${shared}`;
   }
   return registrableDomain(h);
 }

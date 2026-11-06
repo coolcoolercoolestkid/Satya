@@ -52,3 +52,13 @@ describe("shared hosting sites", () => {
     expect(domainCandidates("a.scam-one.pages.dev")).toEqual(["a.scam-one.pages.dev", "scam-one.pages.dev"]);
   });
 });
+
+describe("more shared hosts", () => {
+  it("handles region labels, IPFS gateways and country blogspot domains", async () => {
+    const { siteOf } = await import("../src/index.js");
+    expect(siteOf("login.my-proj.uc.r.appspot.com")).toBe("my-proj.uc.r.appspot.com");
+    expect(siteOf("bafyabc.ipfs.dweb.link")).toBe("bafyabc.ipfs.dweb.link");
+    expect(siteOf("scam.duckdns.org")).toBe("scam.duckdns.org");
+    expect(siteOf("fake-bank.blogspot.co.uk")).toBe("fake-bank.blogspot.co.uk");
+  });
+});

@@ -33,6 +33,7 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | AI content, shown separately and never part of the trust score. Images: reads Content Credentials (C2PA) labels, e.g. "made by AI", "camera photo", "label broken", with the official C2PA SDK running inside the extension | ✅ in the deeper check; tested in a browser on official C2PA test images |
 | Identity: demo DigiLocker issuer (EIP-712 signed claims), proofs on Arkiv owned by the holder | ✅ |
 | Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ✅ real TEST-data proof made, published to Arkiv and read back verified ([record](https://rabdi.explorer.arkiv.network/entity/0x2bc7745c1a37db51b75f81b50a084a828719aaab9a00eed8a4459d8a0d2c2afd)); proving inside the browser not yet timed |
+| **Scam evidence**: Save a page (text, screenshot, findings) to a file; anchor only its SHA-256 fingerprint on Arkiv; anyone can later check the file is unchanged and when it was anchored | ✅ file check tested in a browser; extension capture not yet tried in Chrome |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
 | MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
 | zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |
@@ -58,8 +59,9 @@ sanctioned wallets, lookalikes and common scam patterns, not every bad site on t
 ## Satya on Arkiv
 
 Satya **mirrors public scam lists that Ethereum users depend on** (MetaMask's phishing list,
-which wallets use to block drainer sites, and the US Treasury's sanctioned-wallet list) onto
-Arkiv, in a form anyone can read without revealing what they're checking.
+which wallets use to block drainer sites, the US Treasury's sanctioned-wallet list, and open
+phishing, fraud, scam, ransomware and piracy lists) onto Arkiv, in a form anyone can read
+without revealing what they're checking. Sources and licences: [arkiv/schema.md](arkiv/schema.md).
 
 - **Publisher wallet:** `0x0D341d00bB9c2327033f447b45Ebb8712521E736`
   ([explorer](https://rabdi.explorer.arkiv.network/address/0x0D341d00bB9c2327033f447b45Ebb8712521E736))
@@ -95,6 +97,8 @@ Every flag shows its source. Satya only uses information that is already public.
 | List | Source | License |
 |---|---|---|
 | ~115,000 phishing domains | [MetaMask eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect), mirrored on Arkiv by Satya | DBAD |
+| ~392,000 active phishing domains | [Phishing.Database](https://github.com/mitchellkrogza/Phishing.Database), mirrored on Arkiv by Satya | MIT |
+| Fraud, scam, ransomware and piracy domains (~269,000) | [Block List Project](https://github.com/blocklistproject/Lists), mirrored on Arkiv by Satya | MIT / Unlicense |
 | Sanctioned Ethereum addresses | US Treasury OFAC SDN list (official `SDN.XML`), mirrored on Arkiv by Satya. The extension's offline fallback copy comes from [0xB10C/ofac-sanctioned-digital-currency-addresses](https://github.com/0xB10C/ofac-sanctioned-digital-currency-addresses) | Public domain / MIT |
 | Domain registration dates (deeper check only) | [RDAP](https://rdap.org) | Public registry data |
 | HTTPS certificate history (deeper check only) | [Cert Spotter](https://sslmate.com/certspotter/) | Public CT logs |

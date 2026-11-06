@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { checkRegistry } from "@satya/registry";
 import { checkImageCredentials } from "./c2pa";
-import { credentialFindings } from "@satya/checks";
+import { buildEvidence, credentialFindings } from "@satya/checks";
 import { BUNDLED_TO_REGISTRY, cachedBucket, loadContext } from "./data";
 import type { ContentRequest, SnapshotResponse } from "./messages";
 
@@ -37,7 +37,7 @@ async function sendToTab<T>(tabId: number, msg: ContentRequest): Promise<T | und
 type State =
   | { status: "loading" }
   | { status: "unsupported"; url?: string }
-  | { status: "done"; host: string; result: CredibilityResult; tabId: number; deep: boolean; ensNames: number };
+  | { status: "done"; host: string; result: CredibilityResult; tabId: number; deep: boolean; ensNames: number; page: SnapshotResponse; windowId: number };
 
 function ScoreRing({ score, level }: { score: number; level: CredibilityResult["level"] }) {
   const r = 34;
@@ -91,6 +91,57 @@ function DeeperCheck({ deep, ensNames, onRun }: { deep: boolean; ensNames: numbe
         Credentials (signed "made by AI" or "camera photo" labels){ensNames ? <>, the {ensNames} ENS name{ensNames > 1 ? "s" : ""} on this page to an Ethereum node (publicnode.com) and their wallet addresses to Arkiv to load proofs</> : null}.
         Those services can see your IP address.
       </p>
+    </section>
+  );
+}
+
+declare const __SATYA_WEB_URL__: string;
+
+/**
+ * Freezes the page as evidence: its text, a screenshot and Satya's findings go into a file the
+ * user keeps. Only the file's fingerprint (a SHA-256 hash) is anchored on Arkiv, from the web
+ * app with the user's own wallet, so nobody learns which page it was.
+ */
+function SaveEvidence({ page, result, windowId }: { page: SnapshotResponse; result: CredibilityResult; windowId: number }) {
+  const [saved, setSaved] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const screenshot = await chrome.tabs.captureVisibleTab(windowId, { format: "png" }).catch(() => null);
+      const ev = await buildEvidence({
+        url: page.url,
+        title: page.title,
+        text: page.text,
+        screenshot,
+        score: result.score,
+        label: result.label,
+        findings: result.findings.filter((f) => f.severity === "danger" || f.severity === "warning").map((f) => f.title),
+      });
+      const blob = new Blob([JSON.stringify(ev, null, 1)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `satya-evidence-${new URL(page.url).hostname}-${ev.header.capturedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
+      a.click();
+      setSaved(ev.fingerprint);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="privacy">
+      <p className="muted">
+        <strong>Save evidence.</strong> Scam pages vanish fast. This saves the page's text, a screenshot and these findings
+        to a file on your computer. Then you can anchor its fingerprint on Arkiv (only the hash, never the page) to prove
+        later that the file existed by then, unchanged.
+      </p>
+      <button className="primary" onClick={() => void save()} disabled={busy}>{busy ? "Saving…" : "Save evidence"}</button>
+      {saved && (
+        <p className="muted">
+          Saved. Fingerprint <code>{saved.slice(0, 16)}…</code>{" "}
+          <a href={`${__SATYA_WEB_URL__}/#evidence=${saved}`} target="_blank" rel="noreferrer">Anchor it on Arkiv →</a>
+        </p>
+      )}
     </section>
   );
 }
@@ -150,7 +201,7 @@ function App() {
         : Promise.resolve([] as Finding[]),
     ]);
     const result = scoreFindings([...base.findings, ...registry.findings, registryNote, ...identity, ...images]);
-    setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id, deep, ensNames: ensNamesOnPage(page).length });
+    setState({ status: "done", host: new URL(page.url).hostname, result, tabId: tab.id, deep, ensNames: ensNamesOnPage(page).length, page, windowId: tab.windowId });
     await sendToTab(tab.id, {
       type: "highlight",
       items: result.findings
@@ -221,6 +272,7 @@ function App() {
         </>
       )}
       {state.status === "done" && <DeeperCheck deep={state.deep} ensNames={state.ensNames} onRun={() => void run(true)} />}
+      {state.status === "done" && <SaveEvidence page={state.page} result={state.result} windowId={state.windowId} />}
       <footer className="muted">Every point lost comes from a finding above, with its source.</footer>
     </main>
   );

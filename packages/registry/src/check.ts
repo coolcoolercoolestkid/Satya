@@ -53,13 +53,14 @@ export async function checkRegistry(page: PageSnapshot, fetchBucket: BucketFetch
       const records = await fetchBucket(bucket);
       domainSources.push(sourcesOf(records, "domain"));
       for (const hit of await matchInRecords("domain", domainCandidates(host), records)) {
+        const m = hit.source.match ?? { severity: "danger" as const, weight: 70, title: "Known phishing site" };
         findings.push({
           check: "phishing",
-          severity: "danger",
-          title: "Known phishing site",
-          detail: `${hit.value} appears on ${hit.source.label}.`,
+          severity: m.severity,
+          title: m.title,
+          detail: `${hit.value} appears on ${hit.source.label}.${m.severity === "warning" ? " Such sites often carry malicious ads and fake download buttons." : ""}`,
           source: via(hit.record, hit.source.label),
-          weight: 70,
+          weight: m.weight,
         });
       }
     }

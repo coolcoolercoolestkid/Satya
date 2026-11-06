@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@anon-aadhaar/core": "2.4.3",
+    "@satya/checks": "workspace:*",
     "@satya/identity": "workspace:*",
     "buffer": "^6.0.3",
     "react": "^18.3.1",

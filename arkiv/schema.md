@@ -22,7 +22,7 @@ site without telling anyone which site it is.
 | Attribute | Type | Indexed | Meaning |
 |---|---|---|---|
 | `type` | str | yes | `"domain"` or `"address"` |
-| `source` | str | yes | `"metamask-phishing"` or `"ofac-sdn"` |
+| `source` | str | yes | Source id, e.g. `"metamask-phishing"`, `"ofac-sdn"`, `"phishing-database"`, `"blp-scam"` (table below) |
 | `bucket` | str | yes | Two lowercase hex characters, `"00"` to `"ff"` |
 | `date` | str | yes | Publish date, `YYYY-MM-DD` (UTC) |
 | `published` | u64 | yes | Publish time in unix seconds; all 256 records of one run share it. Readers take the newest per source. |
@@ -38,8 +38,8 @@ site without telling anyone which site it is.
 - **Addresses** go in the bucket given by the first byte of their own hash.
 - **Domains** go in the bucket of their *site*: the registrable domain (`login.evil.com` →
   `evil.com`), or, on shared hosts such as `pages.dev`, `netlify.app` or `vercel.app`, one label
-  under the host (`scam.pages.dev`). So one bucket lookup covers a site and all its
-  subdomains. The record stores the hash of each full listed entry.
+  under the host (`scam.pages.dev`; about 80 hosting, dynamic-DNS and IPFS-gateway services are
+  treated this way). So one bucket lookup covers a site and all its subdomains. The record stores the hash of each full listed entry.
 - The extension hashes the visited host and each parent up to the site, and checks those
   hashes against the bucket on the user's computer.
 
@@ -49,6 +49,16 @@ site without telling anyone which site it is.
 |---|---|---|---|
 | `metamask-phishing` | [MetaMask eth-phishing-detect](https://github.com/MetaMask/eth-phishing-detect) `blacklist`, minus anything on its `whitelist` | DBAD 1.2 (reuse allowed with attribution) | 115,817 domains |
 | `ofac-sdn` | US Treasury OFAC SDN list, official [`SDN.XML`](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML): every Ethereum-format (`0x…`) digital currency address | US government work, public domain | 127 addresses |
+| `phishing-database` | [Phishing.Database](https://github.com/mitchellkrogza/Phishing.Database) `phishing-domains-ACTIVE.txt` | MIT | 391,557 domains |
+| `blp-fraud` | [Block List Project](https://github.com/blocklistproject/Lists) fraud list | MIT (list header), repo Unlicense | 256,184 domains |
+| `blp-scam` | Block List Project scam list | same | 8,527 domains |
+| `blp-piracy` | Block List Project piracy list (shown as a mild warning, not a danger) | same | 2,154 domains |
+| `blp-ransomware` | Block List Project ransomware list | same | 1,904 domains |
+
+Not included: the **RBI Alert List** (RBI's terms forbid copying its contents), **URLhaus**
+(downloads now need an abuse.ch account key, with paid terms for commercial use), and the Block
+List Project **malware** list (about 2 million domains; too large for 128 KB records without a
+record-splitting scheme).
 
 Run manifests with all 256 entity keys per source are in
 [`packages/registry/runs/`](../packages/registry/runs/).
@@ -83,3 +93,24 @@ holder's wallet, which fact, who vouched for it, and the proof itself.
 Every reader re-verifies the payload: signatures for attestations; for Anon Aadhaar, the
 zero-knowledge proof, that it was made for Satya (nullifier seed) and for this wallet (signal).
 Proofs are only accepted for publishing if the Aadhaar QR was signed in the last 3 days.
+
+## 3. `satya_evidence_v1`: scam evidence fingerprints
+
+When someone clicks **Save evidence** in the extension, the page's text, a screenshot and
+Satya's findings go into a file on their computer. The file's header holds SHA-256 hashes of the
+text and screenshot, and the SHA-256 of the canonical header (keys sorted) is the
+**fingerprint**. Only the fingerprint is stored on Arkiv: no URL, no content.
+
+- **Owner:** whoever anchored it, from the web app's **Scam evidence** tab with their wallet.
+- **Expiry:** Arkiv's maximum (about 6 months).
+- **Code:** [`packages/checks/src/evidence.ts`](../packages/checks/src/evidence.ts) (file format and
+  hashing), [`packages/identity/src/arkiv.ts`](../packages/identity/src/arkiv.ts) (record).
+
+| Attribute | Type | Indexed | Meaning |
+|---|---|---|---|
+| `fingerprint` | str | yes | 64 hex characters: SHA-256 of the evidence file's canonical header |
+| `kind` | str | yes | `"page"` |
+
+Checking a file: recompute the text and screenshot hashes, then the fingerprint, then look up
+records with that fingerprint. The oldest record's block time is when the file was proven to
+exist, unchanged. It doesn't prove the website served it (that would need zkTLS).

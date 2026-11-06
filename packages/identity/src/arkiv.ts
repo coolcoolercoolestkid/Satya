@@ -182,3 +182,47 @@ export async function earlierWalletForCard(nullifier: string, holder: Address, a
   const first = uses[0];
   return first && first.holder !== holder.toLowerCase() ? first.holder : undefined;
 }
+
+// ---------- Scam evidence fingerprints ----------
+
+/**
+ * One record per saved piece of evidence. Only the fingerprint (SHA-256 of the evidence file's
+ * header) is stored: no URL, no page content. Owned by the person who saved it.
+ */
+export const SatyaEvidence = defineSchema("satya_evidence_v1", {
+  fingerprint: str().indexed(),
+  kind: str().indexed(),
+});
+
+/** Anchors an evidence fingerprint, kept for Arkiv's maximum lifetime (about 6 months). */
+export async function anchorEvidence(writer: Writer, fingerprint: string) {
+  if (!/^[0-9a-f]{64}$/.test(fingerprint)) throw new Error("Not an evidence fingerprint.");
+  return writer.createEntity(SatyaEvidence, { fingerprint, kind: "page" }, { expiration: ExpirationTime.max() });
+}
+
+export interface EvidenceAnchor {
+  key: Hex;
+  owner: Address;
+  /** Arkiv block the record was created in. */
+  block: bigint;
+  /** That block's time. */
+  at: Date;
+}
+
+/** Every anchor of this fingerprint, oldest first. The first one is when it was proven to exist. */
+export async function findEvidenceAnchors(fingerprint: string, accessKey = ""): Promise<EvidenceAnchor[]> {
+  const client = arkivReader(accessKey);
+  const page = await client
+    .select({ $key: true, $owner: true, $createdAt: true })
+    .from(SatyaEvidence)
+    .where(eq("fingerprint", fingerprint))
+    .limit(20)
+    .fetch();
+  const out: EvidenceAnchor[] = [];
+  for (const row of page.entities) {
+    const block = BigInt(row.$createdAt as unknown as bigint | number | string);
+    const b = await client.getBlock({ blockNumber: block });
+    out.push({ key: row.$key as Hex, owner: row.$owner as Address, block, at: new Date(Number(b.timestamp) * 1000) });
+  }
+  return out.sort((a, b) => (a.block < b.block ? -1 : 1));
+}

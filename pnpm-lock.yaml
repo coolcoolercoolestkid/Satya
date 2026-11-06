@@ -84,6 +84,9 @@ importers:
       '@anon-aadhaar/core':
         specifier: 2.4.3
         version: 2.4.3
+      '@satya/checks':
+        specifier: workspace:*
+        version: link:../../packages/checks
       '@satya/identity':
         specifier: workspace:*
         version: link:../../packages/identity

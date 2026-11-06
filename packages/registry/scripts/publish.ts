@@ -44,6 +44,23 @@ if (existsSync(ENV)) process.loadEnvFile(ENV);
 
 const OFAC_URL = "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML";
 const METAMASK_URL = "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json";
+const TEXT_LISTS: Record<string, { sourceId: string; url: string }> = {
+  "phishing-database": { sourceId: "phishing-database", url: "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-domains-ACTIVE.txt" },
+  "blp-scam": { sourceId: "blp-scam", url: "https://raw.githubusercontent.com/blocklistproject/Lists/master/alt-version/scam-nl.txt" },
+  "blp-fraud": { sourceId: "blp-fraud", url: "https://raw.githubusercontent.com/blocklistproject/Lists/master/alt-version/fraud-nl.txt" },
+  "blp-piracy": { sourceId: "blp-piracy", url: "https://raw.githubusercontent.com/blocklistproject/Lists/master/alt-version/piracy-nl.txt" },
+  "blp-ransomware": { sourceId: "blp-ransomware", url: "https://raw.githubusercontent.com/blocklistproject/Lists/master/alt-version/ransomware-nl.txt" },
+};
+
+/** One domain per line; "#" comments and hosts-file prefixes ("0.0.0.0 ") are ignored. */
+export function textListDomains(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, "").trim().replace(/^(0\.0\.0\.0|127\.0\.0\.1)\s+/, "").toLowerCase();
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(line)) out.push(line);
+  }
+  return out;
+}
 
 interface Loaded {
   sourceId: string;
@@ -87,7 +104,12 @@ async function load(which: string, file?: string): Promise<Loaded> {
     const raw = await download(METAMASK_URL, file);
     return { sourceId: "metamask-phishing", url: METAMASK_URL, sha256: await sha256Hex(raw), values: metamaskDomains(new TextDecoder().decode(raw)) };
   }
-  throw new Error(`Unknown source "${which}". Use ofac or metamask.`);
+  const text = TEXT_LISTS[which];
+  if (text) {
+    const raw = await download(text.url, file);
+    return { sourceId: text.sourceId, url: text.url, sha256: await sha256Hex(raw), values: textListDomains(new TextDecoder().decode(raw)) };
+  }
+  throw new Error(`Unknown source "${which}". Use ofac, metamask or ${Object.keys(TEXT_LISTS).join(", ")}.`);
 }
 
 function publisher() {
@@ -143,9 +165,9 @@ async function publish(which: string, file: string | undefined, dryRun: boolean)
           if (done % 16 === 0 || done === 256) console.log(`  ${done}/256 buckets written`);
           break;
         } catch (err) {
-          if (attempt >= 4) throw err;
+          if (attempt >= 10) throw err; // survives short network or RPC outages
           console.warn(`  bucket ${b} attempt ${attempt} failed: ${err instanceof Error ? err.message.split("\n")[0] : err}`);
-          await new Promise((r) => setTimeout(r, 2000 * attempt));
+          await new Promise((r) => setTimeout(r, Math.min(60_000, 5000 * attempt)));
         }
       }
     }
