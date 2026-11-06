@@ -36,6 +36,7 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | Identity: Anon Aadhaar 18+ proof, fresh-QR rule (3 days), one wallet per card (nullifier on Arkiv) | ✅ real TEST-data proof made, published to Arkiv and read back verified ([record](https://rabdi.explorer.arkiv.network/entity/0x2bc7745c1a37db51b75f81b50a084a828719aaab9a00eed8a4459d8a0d2c2afd)); proving inside the browser not yet timed |
 | **Scam evidence**: Save a page (text, screenshot, findings) to a file; anchor only its SHA-256 fingerprint on Arkiv; anyone can later check the file is unchanged and when it was anchored | ✅ file check tested in a browser; extension capture not yet tried in Chrome |
 | ENS: profile lookup, handle linking, impersonation warnings | ✅ |
+| **Aletheia** ([apps/aletheia](apps/aletheia/README.md)): a demo site with "Sign in with DigiLocker (mock)". An OAuth-style redirect to a clearly labelled mock issuer, which signs only true yes/no claims (18+, nationality, ID valid) to the user's wallet; the site verifies them, never sees a name or date of birth, and can publish them to Arkiv | ✅ sign-in tested in a browser (adult: 3 claims; minor: 18+ refused, 18+ area stays locked); publishing from Aletheia not yet tried with MetaMask |
 | MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
 | **Chainlink CRE workflow** ([cre/](cre/README.md)): every DON node independently looks up a domain's registration date, first certificate, archive history and DNS; the DON agrees on each (median) and scores them | ✅ runs in the CRE simulator with live lookups: uniswap.org 80, two live phishing domains 25 and 40 ([results](cre/README.md#status)); not deployed (needs Chainlink deploy access) |
 | zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |
@@ -205,6 +206,8 @@ pnpm build
 - **Web app (identity):** copy `apps/web/.env.example` to `apps/web/.env`, then
   `pnpm --filter @satya/web dev` and open http://localhost:5173. Publishing proofs needs a
   little test GLM from the [Arkiv faucet](https://hub.arkiv.network/faucet).
+- **Aletheia** (a demo site that signs you in with a mock DigiLocker): `pnpm aletheia`, then
+  open http://localhost:5175. See [apps/aletheia](apps/aletheia/README.md).
 - **Demo scam pages** (local only, clearly labelled, forms send nothing): `pnpm demo`, then
   open http://localhost:5180.
 - **Republish the registry** (needs a funded key in `packages/registry/.env`):
