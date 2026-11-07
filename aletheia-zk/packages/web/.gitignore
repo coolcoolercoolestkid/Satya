@@ -1,0 +1,21 @@
+# Next.js
+/.next/
+/.next-verify/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Dependencies
+/node_modules/
+
+# Runtime assets copied by scripts/copy-assets.ts (large / generated)
+/public/circuits/
+/public/ocr/
+/public/pdf.worker.min.mjs
+
+# The gitignored mock-dev issuer keystore, copied here by the operator (dev only)
+/public/mock-issuer-keystore.json
+
+# Local env (RPC url, dev signer key)
+.env.local
+/public/test/

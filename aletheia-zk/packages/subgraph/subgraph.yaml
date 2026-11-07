@@ -1,0 +1,136 @@
+# Aletheia subgraph manifest.
+#
+# network: sepolia — the chain the v2 contracts are deployed to (docs/deployments.md).
+# One dataSource per contract, except AletheiaVerifier, which appears three times: the
+# stage-18 redeploy (Day 26) produced a new verifier carrying submitExpiryClaim, and the two
+# previous verifiers' records are kept by indexing them as historical data sources rather
+# than orphaning them (Decision 2) — the stage-17 verifier (age + the first nationality
+# claim) and the stage-8..16 verifier (the original age records). All three share one mapping
+# and handler — ClaimVerified has the identical signature on every one — so age, nationality
+# and expiry records from any verifier land in the same Verification entity. Each startBlock
+# is that contract's own deploy block, so indexing never scans a block before the contract
+# existed.
+#
+# No `eth_call` anywhere: every field a record needs is carried by the event, per
+# .cursor/rules/ethereum.mdc. The abis below exist only so graph-cli can decode the event
+# logs; no mapping binds a contract or calls a view function.
+specVersion: 1.3.0
+schema:
+  file: ./schema.graphql
+indexerHints:
+  prune: auto
+dataSources:
+  # The stage-18 AletheiaVerifier (redeployed Day 26): age, nationality and expiry claims.
+  - kind: ethereum/contract
+    name: AletheiaVerifier
+    network: sepolia
+    source:
+      address: "0xB1362a40da22818993b16139da85092a7Bf4FF01"
+      abi: AletheiaVerifier
+      startBlock: 11682101
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Profile
+        - Issuer
+        - Verification
+      abis:
+        - name: AletheiaVerifier
+          file: ./abis/AletheiaVerifier.json
+      eventHandlers:
+        - event: ClaimVerified(indexed bytes32,indexed address,indexed uint8,bytes32,uint256,uint32,bytes32,bytes32,bytes32,uint64)
+          handler: handleClaimVerified
+      file: ./src/verifier.ts
+  # The stage-17 AletheiaVerifier (redeployed Day 24): historical age and nationality
+  # records, including the first real nationality claim, kept indexed so the redeploy does
+  # not orphan them. Same mapping and handler as the new verifier.
+  - kind: ethereum/contract
+    name: AletheiaVerifierStage17
+    network: sepolia
+    source:
+      address: "0xce95C47Ce991B6DB19cF0c55D0fAe3C6CA14a1cA"
+      abi: AletheiaVerifier
+      startBlock: 11681721
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Profile
+        - Issuer
+        - Verification
+      abis:
+        - name: AletheiaVerifier
+          file: ./abis/AletheiaVerifier.json
+      eventHandlers:
+        - event: ClaimVerified(indexed bytes32,indexed address,indexed uint8,bytes32,uint256,uint32,bytes32,bytes32,bytes32,uint64)
+          handler: handleClaimVerified
+      file: ./src/verifier.ts
+  # The previous AletheiaVerifier (stages 8..16): historical age records, kept indexed so
+  # the redeploy does not orphan them. Same mapping and handler as the new verifier.
+  - kind: ethereum/contract
+    name: AletheiaVerifierLegacy
+    network: sepolia
+    source:
+      address: "0x110BB3af042ecbeA118d399e300a4358DC9b993c"
+      abi: AletheiaVerifier
+      startBlock: 11674703
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Profile
+        - Issuer
+        - Verification
+      abis:
+        - name: AletheiaVerifier
+          file: ./abis/AletheiaVerifier.json
+      eventHandlers:
+        - event: ClaimVerified(indexed bytes32,indexed address,indexed uint8,bytes32,uint256,uint32,bytes32,bytes32,bytes32,uint64)
+          handler: handleClaimVerified
+      file: ./src/verifier.ts
+  - kind: ethereum/contract
+    name: AletheiaIssuerRegistry
+    network: sepolia
+    source:
+      address: "0xC3F1ee25b47BbFD25B359B2301ABbDF27d987286"
+      abi: AletheiaIssuerRegistry
+      startBlock: 11674698
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Issuer
+      abis:
+        - name: AletheiaIssuerRegistry
+          file: ./abis/AletheiaIssuerRegistry.json
+      eventHandlers:
+        - event: IssuerRegistered(indexed bytes32,uint256,uint256,string,uint64)
+          handler: handleIssuerRegistered
+        - event: IssuerActiveSet(indexed bytes32,bool)
+          handler: handleIssuerActiveSet
+      file: ./src/registry.ts
+  - kind: ethereum/contract
+    name: AletheiaProfile
+    network: sepolia
+    source:
+      address: "0x64C2c9974B5f6960E9671C0D843a29Be499dB534"
+      abi: AletheiaProfile
+      startBlock: 11674698
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Profile
+      abis:
+        - name: AletheiaProfile
+          file: ./abis/AletheiaProfile.json
+      eventHandlers:
+        - event: ProfileRegistered(indexed address,uint64)
+          handler: handleProfileRegistered
+      file: ./src/profile.ts

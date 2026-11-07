@@ -1,0 +1,35 @@
+{
+  "name": "@aletheia/ens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only ENS resolution through the mainnet Universal Resolver proxy. Forward (name to address) and reverse (address to name); the name is resolved live and never stored.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "check": "node --experimental-strip-types --no-warnings scripts/check.ts"
+  },
+  "dependencies": {
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.2"
+  }
+}

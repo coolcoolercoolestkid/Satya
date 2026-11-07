@@ -1,0 +1,17 @@
+{
+  "name": "@aletheia/subgraph",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Graph subgraph: indexes ClaimVerified, issuer registry changes and profile registrations on Sepolia. The record layer; Ethereum is the authority.",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "test": "node scripts/test.mjs"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.35.0",
+    "assemblyscript": "0.19.23",
+    "matchstick-as": "0.6.0"
+  }
+}

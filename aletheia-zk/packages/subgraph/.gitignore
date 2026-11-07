@@ -1,0 +1,4 @@
+# graph codegen output — regenerated from schema.graphql and the abis.
+generated/
+# graph build output — regenerated from the manifest and mappings.
+build/

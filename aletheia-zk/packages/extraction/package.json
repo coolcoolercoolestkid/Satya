@@ -1,0 +1,40 @@
+{
+  "name": "@aletheia/extraction",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Client-side document extraction. Turns an untrusted TD3 passport MRZ — typed, or read from an image or a PDF, offline and in a worker — into candidate credential fields, with ICAO check digits, century inference and the nationality mapping. Produces candidate fields, never evidence; holds no key and touches no network.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    }
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "make-fixtures": "node --experimental-strip-types scripts/make-fixtures.ts"
+  },
+  "dependencies": {
+    "@aletheia/credential": "workspace:*",
+    "pdfjs-dist": "4.10.38",
+    "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "1.0.9",
+    "@types/node": "^22.19.0",
+    "pdf-lib": "1.17.1",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,77 @@
+[
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "AlreadyRegistered",
+        "type":  "error"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  true,
+                           "internalType":  "address",
+                           "name":  "account",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint64",
+                           "name":  "registeredAt",
+                           "type":  "uint64"
+                       }
+                   ],
+        "name":  "ProfileRegistered",
+        "type":  "event"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "account",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "isRegistered",
+        "outputs":  [
+                        {
+                            "internalType":  "bool",
+                            "name":  "",
+                            "type":  "bool"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "register",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "account",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "registeredAt",
+        "outputs":  [
+                        {
+                            "internalType":  "uint64",
+                            "name":  "registeredAt",
+                            "type":  "uint64"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function"
+    }
+]

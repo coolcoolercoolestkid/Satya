@@ -1,0 +1,61 @@
+# Uploaded to Vercel for the remote Next.js build of packages/web.
+# .vercelignore REPLACES .gitignore for the upload, so this lists everything to EXCLUDE.
+# The @aletheia/* packages compile to dist/ (gitignored) and @aletheia/circuits only builds
+# with circom + a trusted setup that cannot run on Vercel — so the locally-built dist/ and
+# circuit build are uploaded and Vercel just runs the web app's build.
+
+# --- Secrets: never upload ---
+.env
+.env.*
+**/.env
+**/.env.*
+
+# --- Dependencies & VCS (Vercel reinstalls) ---
+.git
+node_modules
+**/node_modules
+
+# --- Build caches / local tooling ---
+.next
+**/.next
+.next-verify
+**/.next-verify
+.vercel
+**/.vercel
+.turbo
+**/.turbo
+**/*.tsbuildinfo
+.claude
+coverage
+**/coverage
+*.log
+
+# --- Heavy / not needed on Vercel ---
+# packages/circuits/build IS uploaded: the web build's prebuild (copy-assets.ts) copies the
+# circuit wasm/zkey from there into public/circuits. circom cannot run on Vercel and the
+# phase-2 setup is non-deterministic, so regenerating would break the deployed verifiers —
+# the locally-built, verifier-matching artifacts are shipped instead (they stay gitignored,
+# never committed). ptau is the setup input and is not needed at build time.
+packages/circuits/ptau
+packages/subgraph/build
+packages/subgraph/generated
+packages/contracts/artifacts
+packages/contracts/cache
+packages/contracts/ignition/deployments
+packages/contracts/typechain-types
+
+# The public/ runtime assets copy-assets.ts regenerates on Vercel from circuits/build and
+# node_modules, so they need not be uploaded (the keystore is NOT regenerated — it stays).
+packages/web/public/circuits
+packages/web/public/ocr
+packages/web/public/pdf.worker.min.mjs
+
+# --- Private-key sources (the mock-dev key ships only via web/public/mock-issuer-keystore.json) ---
+packages/issuer-mock/keys
+keystore
+
+# NOTE: intentionally NOT excluded, so they upload for the remote build:
+#   packages/*/dist                                (locally-built package output the web app imports)
+#   packages/circuits/build                        (circuit wasm/zkey, matched to the deployed verifiers)
+#   packages/web/public/mock-issuer-keystore.json  (mock-dev key; copy-assets does not create it)
+#   packages/web/src/abi/*.json                    (committed ABI + deployment manifest)

@@ -1,0 +1,21 @@
+packages:
+  - packages/*
+  # The cross-package end-to-end runner (docs/architecture.md). Top-level, not under
+  # packages/, because it depends on every package rather than being one of them.
+  - scripts
+
+# Install scripts run arbitrary code, so each one is allowed deliberately.
+allowBuilds:
+  # circomlibjs falls back to a JavaScript implementation for the paths Aletheia uses
+  # (Poseidon and EdDSA), so this native build is not needed.
+  blake-hash: false
+  # Fetches its own platform binary; Hardhat cannot run without it.
+  esbuild: true
+  # tesseract.js' only install script is `opencollective-postinstall` (a donation
+  # banner). Nothing the OCR path needs runs in it — the wasm core ships in
+  # tesseract.js-core and the MRZ model is committed under packages/extraction/assets —
+  # so it stays off.
+  tesseract.js: false
+  # sharp is Next.js' optional native image optimiser. The holder flow serves no
+  # optimised images, so its native build is not needed and stays off.
+  sharp: false

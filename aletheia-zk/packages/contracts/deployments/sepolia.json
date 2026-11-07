@@ -1,0 +1,79 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "schemaVersion": 2,
+  "deployedBy": "0xA66f7fc3F125b06a5fd4f107D31a400103866cAe",
+  "deployedAt": "2026-09-11",
+  "note": "Durable, machine-readable copy of the Ignition deployment output (packages/contracts/ignition/deployments, gitignored) and docs/deployments.md (the human copy). The end-to-end runner reads this and then cross-checks it live on-chain, so a stale entry fails loudly rather than silently. AletheiaVerifier was redeployed for stage 18 (Day 26) to add submitExpiryClaim; the registry, profile, age verifier and nationality verifier are reused unchanged. Every previous AletheiaVerifier is kept under previousDeployments so the subgraph can index their historical age and nationality records alongside the new verifier (Decision 2). Update this file whenever the contracts are redeployed.",
+  "contracts": {
+    "AletheiaIssuerRegistry": {
+      "address": "0xC3F1ee25b47BbFD25B359B2301ABbDF27d987286",
+      "deployBlock": 11674698
+    },
+    "Groth16VerifierAge": {
+      "address": "0x369b25B54a7829dE4343eA3625f0FC7D8A2D6eb7",
+      "deployBlock": 11674698
+    },
+    "Groth16VerifierNationality": {
+      "address": "0xB559D20Be873531F59d4A6020A481A32D9384Ab4",
+      "deployBlock": 11681716
+    },
+    "Groth16VerifierExpiry": {
+      "address": "0xD06938Ad57FDfE392E88dD249A4FE92D056dCDA2",
+      "deployBlock": 11682096
+    },
+    "AletheiaVerifier": {
+      "address": "0xB1362a40da22818993b16139da85092a7Bf4FF01",
+      "deployBlock": 11682101
+    },
+    "AletheiaProfile": {
+      "address": "0x64C2c9974B5f6960E9671C0D843a29Be499dB534",
+      "deployBlock": 11674698
+    }
+  },
+  "ageClaim": {
+    "claimType": 1,
+    "setClaimVerifierBlock": 11682107
+  },
+  "nationalityClaim": {
+    "claimType": 2,
+    "setClaimVerifierBlock": 11682107
+  },
+  "expiryClaim": {
+    "claimType": 3,
+    "setClaimVerifierBlock": 11682107
+  },
+  "previousDeployments": [
+    {
+      "note": "The stage-17 AletheiaVerifier (deployed Day 24), which carried age and nationality but predated submitExpiryClaim. Its records — including the first real nationality claim — stay valid and immutable, so the subgraph indexes it as a historical AletheiaVerifier data source rather than orphaning them (Decision 2).",
+      "AletheiaVerifier": {
+        "address": "0xce95C47Ce991B6DB19cF0c55D0fAe3C6CA14a1cA",
+        "deployBlock": 11681721
+      },
+      "ageClaim": {
+        "claimType": 1,
+        "setClaimVerifierBlock": 11681726
+      },
+      "nationalityClaim": {
+        "claimType": 2,
+        "setClaimVerifierBlock": 11681726
+      }
+    },
+    {
+      "note": "The stage-8 AletheiaVerifier, deployed before submitNationalityClaim existed. Its age-claim records (blocks 11674709..11681xxx) stay valid and immutable, so the subgraph indexes it as a historical AletheiaVerifier data source rather than orphaning those records (Decision 2).",
+      "AletheiaVerifier": {
+        "address": "0x110BB3af042ecbeA118d399e300a4358DC9b993c",
+        "deployBlock": 11674703
+      },
+      "ageClaim": {
+        "claimType": 1,
+        "setClaimVerifierBlock": 11674709
+      }
+    }
+  ],
+  "mockIssuer": {
+    "issuerId": "0xfee4bdf6ec605973cbc4ae331ef4c92cfc89ce43fb42da6d4d6517a164be2588",
+    "label": "mock-dev",
+    "registeredBlock": 11674721
+  }
+}

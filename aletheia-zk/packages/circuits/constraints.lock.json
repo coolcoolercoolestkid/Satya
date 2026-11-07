@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "Committed constraint counts per circuit, asserted by the test suite.",
+    "A change here must be deliberate and reviewed: a sudden drop can mean a check was",
+    "lost, and a jump can mean a template was instantiated by accident.",
+    "Schema v2 (nine public signals) raised age from 8421/1872 with seven signals: the",
+    "credential message hash went from Poseidon(7) to Poseidon(8), the identityNullifier",
+    "added a Poseidon(2), and schemaVersion added one public input and its equality pin."
+  ],
+  "circuits": {
+    "age": {
+      "nonLinearConstraints": 8685,
+      "linearConstraints": 2216,
+      "publicInputs": 7,
+      "privateInputs": 9,
+      "publicOutputs": 2,
+      "wires": 10890
+    },
+    "nationality": {
+      "nonLinearConstraints": 8586,
+      "linearConstraints": 2202,
+      "publicInputs": 7,
+      "privateInputs": 9,
+      "publicOutputs": 2,
+      "wires": 10783
+    },
+    "expiry": {
+      "nonLinearConstraints": 8570,
+      "linearConstraints": 2202,
+      "publicInputs": 7,
+      "privateInputs": 9,
+      "publicOutputs": 2,
+      "wires": 10768
+    }
+  }
+}

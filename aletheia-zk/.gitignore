@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# typescript / build output
+dist/
+*.tsbuildinfo
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+keystore/
+packages/issuer-mock/keys/
+
+# circuit artifacts (regenerate with pnpm --filter circuits build)
+packages/circuits/build/
+packages/circuits/ptau/*.ptau
+
+# hardhat
+packages/contracts/artifacts/
+packages/contracts/cache/
+packages/contracts/types/
+packages/contracts/ignition/deployments/
+
+# subgraph codegen
+packages/subgraph/generated/
+packages/subgraph/build/
+
+# next.js
+packages/web/.next/
+packages/web/out/
+packages/web/public/circuits/*.zkey
+packages/web/public/circuits/*.wasm
+
+# test / coverage
+coverage/
+*.log

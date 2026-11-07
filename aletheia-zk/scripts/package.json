@@ -1,0 +1,23 @@
+{
+  "name": "@aletheia/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The cross-package end-to-end runner. One command drives the whole pipeline against real infrastructure: signed credential, circuit, proof, local verify, Solidity verify, Sepolia transaction, event, Graph, verifier query.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "m1": "node --experimental-strip-types --no-warnings src/m1.ts",
+    "multi-claim": "node --experimental-strip-types --no-warnings src/multi-claim.ts"
+  },
+  "dependencies": {
+    "@aletheia/circuits": "workspace:*",
+    "@aletheia/credential": "workspace:*",
+    "@aletheia/issuer-mock": "workspace:*",
+    "@aletheia/query": "workspace:*",
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.2"
+  }
+}

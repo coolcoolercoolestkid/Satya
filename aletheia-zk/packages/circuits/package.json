@@ -1,0 +1,30 @@
+{
+  "name": "@aletheia/circuits",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Circom 2.x claim circuits, Groth16 setup, and the proving API built on them.",
+  "exports": {
+    ".": "./dist/index.js",
+    "./browser": "./dist/browser.js"
+  },
+  "scripts": {
+    "build:circuits": "node --experimental-strip-types --no-warnings scripts/compile.ts",
+    "build:setup": "node --experimental-strip-types --no-warnings scripts/setup.ts",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build": "pnpm run build:circuits && pnpm run build:setup && pnpm run build:ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm --filter @aletheia/credential run build && pnpm --filter @aletheia/issuer-mock run build && pnpm run build",
+    "test": "node --experimental-strip-types --no-warnings --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@aletheia/credential": "workspace:*",
+    "circomlib": "2.0.5",
+    "snarkjs": "0.7.6"
+  },
+  "devDependencies": {
+    "@aletheia/issuer-mock": "workspace:*",
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.2"
+  }
+}

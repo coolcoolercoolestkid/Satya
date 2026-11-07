@@ -1,0 +1,84 @@
+# Aletheia subgraph schema.
+#
+# The event is the only input, and the event carries no private field — see
+# docs/architecture.md and .cursor/rules/ethereum.mdc — so nothing here can leak a date
+# of birth, a nationality value, an expiry date or a credential id. Every field below
+# traces to a public signal or an on-chain event parameter.
+#
+# Bytes ids throughout. Relations are stored on the many side (Verification), and the one
+# side derives its list with @derivedFrom, so no handler ever mutates an array.
+
+"An address that has opted in to Aletheia and/or has verifications against it."
+type Profile @entity(immutable: false) {
+  "The wallet address, lower-cased Bytes."
+  id: Bytes!
+
+  "Unix seconds of AletheiaProfile.register(), if the address ever registered. Null if the address only appears as a verification subject."
+  registeredAt: BigInt
+
+  "Every verification this address has proven, newest resolvable via the record's own timestamp."
+  verifications: [Verification!]! @derivedFrom(field: "subject")
+}
+
+"A recognised issuer key. Phase 1's only issuer is labelled `mock-dev`; that label is load-bearing — every record derived from it must read as mocked, never as a real identity."
+type Issuer @entity(immutable: false) {
+  "keccak256(abi.encode(ax, ay)) — the registry's deterministic issuer id."
+  id: Bytes!
+
+  "EdDSA BabyJubjub public key x, from IssuerRegistered."
+  ax: BigInt!
+
+  "EdDSA BabyJubjub public key y, from IssuerRegistered."
+  ay: BigInt!
+
+  "Free-text label. `mock-dev` for the only Phase 1 issuer. Not trusted; it is a label."
+  label: String!
+
+  "False once revoked via setActive(id, false). Existing records are unaffected by design."
+  active: Boolean!
+
+  "Unix seconds the issuer was first registered."
+  registeredAt: BigInt!
+
+  "Every verification proven against this issuer's key."
+  verifications: [Verification!]! @derivedFrom(field: "issuer")
+}
+
+"A single proven claim. Immutable: it was true when it was made, and a record is never rewritten."
+type Verification @entity(immutable: true) {
+  "verificationId = keccak256(claimType, contextId, nullifier), unique per record."
+  id: Bytes!
+
+  "The wallet that proved it, which is always msg.sender."
+  subject: Profile!
+
+  "The issuer whose signature the proof used."
+  issuer: Issuer!
+
+  "1 age (2 nationality and 3 expiry follow in later stages)."
+  claimType: Int!
+
+  "The question's parameter, e.g. the age threshold. Chosen by the verifier, never a private field."
+  claimParameter: BigInt!
+
+  "The date the credential was proven unexpired on, YYYYMMDD."
+  credentialValidOn: Int!
+
+  "The verifier scope the proof was bound to."
+  contextId: Bytes!
+
+  "Per credential, claim type and context; makes replay detectable on-chain."
+  nullifier: Bytes!
+
+  "Poseidon(identitySecret, contextId): stable across every credential and wallet one identity proves with in this context, and unrelated across contexts. A per-context correlation handle by design — see docs/trust-model.md."
+  identityNullifier: Bytes!
+
+  "Unix seconds the claim was verified (block.timestamp, as the contract emitted it)."
+  verifiedAt: BigInt!
+
+  "Block the ClaimVerified event was emitted in."
+  blockNumber: BigInt!
+
+  "The submitting transaction, so every record links back to its on-chain proof."
+  transactionHash: Bytes!
+}

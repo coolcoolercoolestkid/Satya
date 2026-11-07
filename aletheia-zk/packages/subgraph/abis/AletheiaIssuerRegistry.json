@@ -1,0 +1,379 @@
+[
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "initialOwner",
+                           "type":  "address"
+                       }
+                   ],
+        "stateMutability":  "nonpayable",
+        "type":  "constructor"
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "InvalidIssuerKey",
+        "type":  "error"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "bytes32",
+                           "name":  "issuerId",
+                           "type":  "bytes32"
+                       }
+                   ],
+        "name":  "IssuerAlreadyRegistered",
+        "type":  "error"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "bytes32",
+                           "name":  "issuerId",
+                           "type":  "bytes32"
+                       }
+                   ],
+        "name":  "IssuerNotActive",
+        "type":  "error"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "bytes32",
+                           "name":  "issuerId",
+                           "type":  "bytes32"
+                       }
+                   ],
+        "name":  "IssuerNotRegistered",
+        "type":  "error"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "owner",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "OwnableInvalidOwner",
+        "type":  "error"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "account",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "OwnableUnauthorizedAccount",
+        "type":  "error"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  true,
+                           "internalType":  "bytes32",
+                           "name":  "issuerId",
+                           "type":  "bytes32"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "bool",
+                           "name":  "active",
+                           "type":  "bool"
+                       }
+                   ],
+        "name":  "IssuerActiveSet",
+        "type":  "event"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  true,
+                           "internalType":  "bytes32",
+                           "name":  "issuerId",
+                           "type":  "bytes32"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "ax",
+                           "type":  "uint256"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "ay",
+                           "type":  "uint256"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "string",
+                           "name":  "label",
+                           "type":  "string"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint64",
+                           "name":  "registeredAt",
+                           "type":  "uint64"
+                       }
+                   ],
+        "name":  "IssuerRegistered",
+        "type":  "event"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  true,
+                           "internalType":  "address",
+                           "name":  "previousOwner",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  true,
+                           "internalType":  "address",
+                           "name":  "newOwner",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "OwnershipTransferStarted",
+        "type":  "event"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  true,
+                           "internalType":  "address",
+                           "name":  "previousOwner",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  true,
+                           "internalType":  "address",
+                           "name":  "newOwner",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "OwnershipTransferred",
+        "type":  "event"
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "acceptOwnership",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "bytes32",
+                           "name":  "id",
+                           "type":  "bytes32"
+                       }
+                   ],
+        "name":  "issuer",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "ax",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "ay",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "bool",
+                                                   "name":  "active",
+                                                   "type":  "bool"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "label",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint64",
+                                                   "name":  "registeredAt",
+                                                   "type":  "uint64"
+                                               }
+                                           ],
+                            "internalType":  "struct AletheiaIssuerRegistry.Issuer",
+                            "name":  "",
+                            "type":  "tuple"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "ax",
+                           "type":  "uint256"
+                       },
+                       {
+                           "internalType":  "uint256",
+                           "name":  "ay",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "issuerId",
+        "outputs":  [
+                        {
+                            "internalType":  "bytes32",
+                            "name":  "",
+                            "type":  "bytes32"
+                        }
+                    ],
+        "stateMutability":  "pure",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "owner",
+        "outputs":  [
+                        {
+                            "internalType":  "address",
+                            "name":  "",
+                            "type":  "address"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "pendingOwner",
+        "outputs":  [
+                        {
+                            "internalType":  "address",
+                            "name":  "",
+                            "type":  "address"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "ax",
+                           "type":  "uint256"
+                       },
+                       {
+                           "internalType":  "uint256",
+                           "name":  "ay",
+                           "type":  "uint256"
+                       },
+                       {
+                           "internalType":  "string",
+                           "name":  "label",
+                           "type":  "string"
+                       }
+                   ],
+        "name":  "register",
+        "outputs":  [
+                        {
+                            "internalType":  "bytes32",
+                            "name":  "id",
+                            "type":  "bytes32"
+                        }
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "renounceOwnership",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "ax",
+                           "type":  "uint256"
+                       },
+                       {
+                           "internalType":  "uint256",
+                           "name":  "ay",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "requireActive",
+        "outputs":  [
+                        {
+                            "internalType":  "bytes32",
+                            "name":  "id",
+                            "type":  "bytes32"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "bytes32",
+                           "name":  "id",
+                           "type":  "bytes32"
+                       },
+                       {
+                           "internalType":  "bool",
+                           "name":  "active",
+                           "type":  "bool"
+                       }
+                   ],
+        "name":  "setActive",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "newOwner",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "transferOwnership",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    }
+]

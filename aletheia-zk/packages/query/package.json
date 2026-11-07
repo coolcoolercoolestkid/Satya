@@ -1,0 +1,33 @@
+{
+  "name": "@aletheia/query",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed GraphQL read client for the Aletheia subgraph. Every read carries the indexer's block and error state, so indexing lag is answerable rather than invisible.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "check": "node --experimental-strip-types --no-warnings scripts/check.ts",
+    "states": "node --experimental-strip-types --no-warnings scripts/states.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,62 @@
+---
+description: Solidity, Hardhat, viem and subgraph engineering rules for Aletheia
+globs: packages/contracts/**,packages/subgraph/**,packages/web/**,scripts/**
+alwaysApply: false
+---
+
+# Ethereum engineering rules
+
+## Contracts
+
+- The contract is the only place cryptographic truth is decided. The frontend is
+  authoritative for nothing.
+- snarkjs-generated verifiers are committed **verbatim** and never hand-edited. A test
+  asserts each generated verifier matches its verification key.
+- Validate before verifying: signal count, `subject == msg.sender`, date freshness
+  derived from `block.timestamp`, claim-parameter ranges, issuer activity, nullifier
+  novelty. Then call `verifyProof`.
+- Mark a nullifier used **before** the external verifier call.
+- Custom errors, not revert strings. Every failure mode gets its own error.
+- Never store a negative result. An invalid proof reverts, so a record cannot be false,
+  and "not verified" is the absence of a record.
+- `Ownable2Step` for admin functions; every admin change emits an indexed event so it is
+  publicly visible in the subgraph.
+- No proxies or upgradeability in Phase 1. Redeploying and repointing the subgraph is
+  cheaper than proxy risk.
+- Never put unverified user-supplied identity strings on-chain, ENS names included.
+
+## Events
+
+- Events are the subgraph's only input, so they carry every field a record needs and no
+  private field ever.
+- Never emit a date of birth, nationality value of the holder beyond the claim parameter
+  the verifier itself chose, expiry date, credential id, or anything derived from a
+  document.
+
+## Subgraph
+
+- `Bytes` ids, `@entity(immutable: true)` for records that never change, `@derivedFrom`
+  on the one side of a relation.
+- No `eth_call` in mappings. If a field is needed, emit it.
+- Queries read `_meta.block.number` and `hasIndexingErrors` so indexing lag becomes an
+  explicit `pending` state instead of a silent wrong answer.
+
+## Frontend and clients
+
+- viem `>= 2.35` pinned directly (wagmi accepts any 2.x, so upgrading wagmi is not
+  enough) for ENSv2-ready resolution.
+- ENS resolution goes through the Universal Resolver proxy
+  `0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe`. Never hardcode an implementation address.
+- ENS is read-only in Phase 1. No registrar, no subname minting, no records written.
+- A submitted transaction is never rendered as verified. Only an indexed record is.
+- Distinguish verified, stale, revoked issuer, pending indexing, and not found, each with
+  its own reason.
+- Contract addresses come from generated deployment output, never from user input or a
+  literal in application code.
+
+## Never
+
+Hardcoded proof results, transaction hashes, GraphQL responses, ENS records, verification
+outcomes, or contract addresses. No mocked `fetch`, stubbed provider, or simulated chain
+success in the submit or read paths. Test doubles belong in unit tests of pure functions
+only. `packages/issuer-mock` is the single sanctioned mock in this repository.

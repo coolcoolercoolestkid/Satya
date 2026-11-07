@@ -1,0 +1,57 @@
+---
+description: Circom / snarkjs engineering rules for Aletheia circuits and proving code
+globs: packages/circuits/**,packages/credential/**,scripts/**
+alwaysApply: false
+---
+
+# ZK engineering rules
+
+## Compiler
+
+- circom **2.x only** (currently 2.2.3). The npm `circom@0.5.x` package is the frozen
+  circom 1 compiler and must never be used. Build scripts assert the version.
+- Always compile with `--inspect`. Warnings about unconstrained signals or a `<--` that
+  could be `<==` are treated as errors, not notes.
+
+## Constraints
+
+- Use `<==` / `==>`. Reserve `<--` for expressions that cannot be a quadratic
+  constraint, and always pair it with an explicit `===` that pins the relationship.
+- Never leave a security-relevant value computed but unconstrained.
+- Range-check every value before it reaches a comparator (`Num2Bits(n)` with `n` at
+  least the comparator width). Finite-field wraparound is a soundness bug, not an edge
+  case.
+- Range-check **public** inputs too. A caller chooses them, and `a * 10000` can wrap.
+- Bind identity into outputs rather than leaving pass-through signals dangling: the
+  nullifier hash is what constrains `subject` and `contextId`.
+
+## Circuit structure
+
+- Shared credential logic (signature check, expiry, nullifier) lives in
+  `lib/credential.circom` and is instantiated by each claim circuit. Do not duplicate it.
+- Signature verification happens **in-circuit**. A claim proven over unsigned data
+  proves nothing.
+- Public-signal order is frozen in `docs/public-signals.md`: outputs first, then public
+  inputs in declaration order. Assert it against generated artifacts; never rely on
+  memory.
+
+## Proving pipeline
+
+- Phase-1 `ptau` is a published Perpetual Powers of Tau file, pinned by hash. Never
+  generate a phase-1 ceremony locally and present it as real.
+- Every zkey contribution is named and recorded. The single-contributor status of the
+  development phase-2 ceremony stays documented in `docs/trust-model.md`.
+- Regenerating a circuit requires regenerating its Solidity verifier and re-asserting the
+  verifier against the verification key.
+
+## Tests
+
+Every circuit needs, at minimum:
+
+- a positive case built from a real issuer signature, not hand-written field values
+- boundary cases on both sides of every comparison
+- negative cases: tampered field, wrong issuer key, expired credential, wrong subject,
+  out-of-range parameter
+- a constraint-count snapshot, so an accidental blow-up or collapse shows up in review
+
+A circuit that only has passing positive tests is untested.

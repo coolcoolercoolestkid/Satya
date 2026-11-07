@@ -1,0 +1,27 @@
+{
+  "name": "@aletheia/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Groth16 verifiers, the issuer registry, and AletheiaVerifier — the only place a claim becomes true.",
+  "scripts": {
+    "export-verifier": "node --experimental-strip-types --no-warnings scripts/export-verifier.ts",
+    "build": "hardhat compile",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm --filter @aletheia/circuits run build",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@aletheia/circuits": "workspace:*",
+    "@aletheia/credential": "workspace:*",
+    "@aletheia/issuer-mock": "workspace:*",
+    "@aletheia/query": "workspace:*",
+    "@nomicfoundation/hardhat-ignition": "^3.1.8",
+    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
+    "@openzeppelin/contracts": "5.6.1",
+    "@types/node": "^22.19.0",
+    "hardhat": "^3.16.0",
+    "typescript": "^5.9.2",
+    "viem": "^2.56.3"
+  }
+}
