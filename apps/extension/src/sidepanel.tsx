@@ -508,9 +508,9 @@ function App() {
 
     // 2. Full check: every lookup runs at once, each with a time limit, then the receipt updates.
     void checkAiText(page.mainText || page.text, myRun);
-    const addresses = [...new Set((page.text.match(/0x[a-fA-F0-9]{40}/g) ?? []).map((a) => a.toLowerCase()))].slice(0, 5);
+    const addresses = [...new Set((page.text.match(/\b0x[a-fA-F0-9]{40}\b/g) ?? []).map((a) => a.toLowerCase()))].slice(0, 5);
     const noImages: ImageCheck = { creds: [], found: 0, checked: 0, errors: [], metadata: [] };
-    const [full, identity, images, siteEns, verified, ensNames] = await Promise.all([
+    const [full, identity, images, siteEns, verified, ensNames, people] = await Promise.all([
       withTimeout(analyzePage(page, { ...localCtx, network: true, fetchImpl: timedFetch }), quick, LOOKUP_MS + 1000),
       withTimeout(
         loadIdentity().then((id) => id.checkIdentity(page, id.defaultIdentityDeps(__ARKIV_ACCESS_KEY__))),
@@ -529,7 +529,16 @@ function App() {
             [] as Finding[],
           ),
       addresses.length ? withTimeout(lookupVerifiedContracts(addresses), [] as VerifiedContract[]) : Promise.resolve([] as VerifiedContract[]),
-      loadIdentity().then((id) => id.ensNamesOnPage(page).length).catch(() => 0),
+      withTimeout(loadIdentity().then((id) => id.ensNamesOnPage(page).length), 0),
+      // Wallets on the page that belong to people verified on Aletheia (identity records on Arkiv).
+      addresses.length
+        ? withTimeout(
+            loadIdentity().then(async (id) =>
+              (await Promise.all(addresses.map((a) => id.findIdentities({ holder: a as `0x${string}` }, __ARKIV_ACCESS_KEY__, 3)))).flat(),
+            ),
+            [] as import("@satya/identity").FoundIdentity[],
+          )
+        : Promise.resolve([] as import("@satya/identity").FoundIdentity[]),
     ]);
     if (runId.current !== myRun) return;
     const contractFindings: Finding[] = verified.map((c) => ({
@@ -541,11 +550,34 @@ function App() {
       evidence: c.address,
       weight: 0,
     }));
+    const peopleFindings: Finding[] = people.map((f) => {
+      const r = f.signed.record;
+      const w = `${r.holder.slice(0, 6)}…${r.holder.slice(-4)}`;
+      return f.check.ok
+        ? {
+            check: "identity",
+            severity: "good",
+            title: `${w} belongs to ${r.name}`,
+            detail: `Verified by Mock DigiLocker (demo issuer) against a ${r.docType}: ${r.claims.replace(/,/g, ", ")}. Record on Arkiv ${f.key.slice(0, 10)}….`,
+            source: "Aletheia identity record on Arkiv",
+            evidence: r.holder,
+            weight: 0,
+          }
+        : {
+            check: "identity",
+            severity: "warning",
+            title: `${w} claims to be ${r.name}, but the record isn't valid`,
+            detail: f.check.reason,
+            source: "Aletheia identity record on Arkiv",
+            evidence: r.holder,
+            weight: 0,
+          };
+    });
     const imageFindings = [
       ...credentialFindings(images.creds, images.checked),
       ...metadataFindings(images.metadata.filter((m) => !images.creds.some((c) => c.url === m.url))),
     ];
-    const result = scoreFindings([...full.findings, ...registry.findings, ...identity, ...imageFindings, ...siteEns, ...contractFindings]);
+    const result = scoreFindings([...full.findings, ...registry.findings, ...identity, ...peopleFindings, ...imageFindings, ...siteEns, ...contractFindings]);
     setState({
       ...base,
       result,

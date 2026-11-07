@@ -1,8 +1,8 @@
 # Satya's Arkiv records
 
-Satya stores two kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
+Satya stores five kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
 RPC `https://rpc.rabdi.db-chain.testnet.arkiv.network`, explorer
-`https://rabdi.explorer.arkiv.network`). Both are written through `defineSchema` from
+`https://rabdi.explorer.arkiv.network`). All are written through `defineSchema` from
 `@arkiv-network/sdk`, so every entity carries the attribute `arkiv.schema` with the schema's
 name.
 
@@ -142,3 +142,31 @@ address costs no privacy.)
 
 Example filters: `address = addr(0x…)`, `program = str('DPRK4')`, `currency = str('USDT')`,
 always with `$owner = addr(0x0D341d00bB9c2327033f447b45Ebb8712521E736)`.
+
+## 5. `satya_identity_v1`: verified people, searchable
+
+Written by **Aletheia** ([apps/aletheia](../apps/aletheia/README.md)) when someone publishes the
+record the mock DigiLocker issued them. Owned by the person's wallet; expires with their ID
+(capped at Arkiv's maximum lifetime).
+
+| Attribute | Type | Indexed | What |
+|---|---|---|---|
+| `holder` | addr | ✓ | The wallet the record is about |
+| `name` | str | | Name as signed by the issuer (public by design) |
+| `nameKey` | str | ✓ | Lower-case, single-spaced name, for exact search |
+| `docHash` | str | ✓ | SHA-256 of the document file shown to the issuer (the file itself is never stored) |
+| `docType` | str | | e.g. "Aadhaar card", "Passport" |
+| `issuer` | addr | ✓ | Issuer's signing address (mock DigiLocker: `0x48D4…9BaB`) |
+| `published` | u64 | ✓ | Unix seconds; newest first in listings |
+| payload | bytes | | The signed record (EIP-712 "Satya Identity": holder, name, docType, docHash, claims, issuedAt, expiresAt) |
+
+**Queries** (all in [packages/identity/src/identityRecord.ts](../packages/identity/src/identityRecord.ts)):
+by `nameKey`, by `holder`, by `docHash`, or the most recent (`ORDER BY published DESC`).
+Arkiv answers them directly; there is no indexer or subgraph.
+
+**Why nobody can fake one:** a result only counts if the record is owned by the wallet it names
+and the payload's signature recovers to a trusted issuer. Both are checked in the reader's browser.
+
+**Live record:** fictional resident Asha Verma, bound to the publisher wallet
+`0x0D341d00bB9c2327033f447b45Ebb8712521E736`, published with
+`packages/registry/scripts/publish-identity.ts` (the same issue/publish code the site uses).

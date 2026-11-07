@@ -1,19 +1,20 @@
 import {
   arkivBrowserWriter,
-  CLAIM_LABELS,
   ClaimRefusedError,
-  fetchProofRecords,
-  issueClaim,
-  parseAttestation,
-  publishAttestation,
-  serializeAttestation,
-  verifyAttestation,
-  type ClaimId,
+  describeFacts,
+  findIdentities,
+  fingerprint,
+  issueIdentity,
+  parseIdentity,
+  publishIdentity,
+  serializeIdentity,
+  verifyIdentity,
+  type FoundIdentity,
   type DocumentDetails,
-  type SignedAttestation,
+  type SignedIdentity,
 } from "@satya/identity";
-import { useEffect, useState } from "react";
-import { isAddress, type Address, type EIP1193Provider } from "viem";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { isAddress, type Address, type EIP1193Provider, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 declare global {
@@ -24,12 +25,11 @@ declare global {
 
 const ARKIV_KEY = import.meta.env.VITE_ARKIV_ACCESS_KEY ?? "";
 const ARKIV_EXPLORER = "https://rabdi.explorer.arkiv.network";
-const CLAIM_NAME: Record<ClaimId, string> = { age_over_18: "18+", nationality: "Nationality", id_valid: "ID valid" };
-const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const short = (a: string, n = 4) => `${a.slice(0, n + 2)}…${a.slice(-n)}`;
+const day = (t: bigint) => new Date(Number(t) * 1000).toISOString().slice(0, 10);
 
 /* ------------------------------------------------------------------ routing */
 
-/** Hash routes: #/, #/mock-digilocker/authorize?…, #/callback?…, #/account, #/u/<address>. */
 function useRoute() {
   const read = () => {
     const h = location.hash.replace(/^#/, "") || "/";
@@ -51,33 +51,40 @@ const go = (to: string) => {
   location.hash = to;
 };
 
-/* ------------------------------------------------------------- sign-in data */
-
-/** The claims Aletheia asks for. It never asks for a name, date of birth or ID number. */
-const SCOPE: ClaimId[] = ["age_over_18", "nationality", "id_valid"];
+/* ------------------------------------------------------------- residents */
 
 /** Fictional residents of the mock DigiLocker. Invented people; no real data. */
-const RESIDENTS: { id: string; name: string; note: string; doc: DocumentDetails }[] = [
-  { id: "asha", name: "Asha Verma", note: "Adult · India · ID valid", doc: { dateOfBirth: "1999-04-12", nationality: "IN", documentExpiry: "2031-06-30" } },
-  { id: "rohan", name: "Rohan Mehta", note: "Minor · India (born 2010)", doc: { dateOfBirth: "2010-01-20", nationality: "IN", documentExpiry: "2030-01-01" } },
-  { id: "kavya", name: "Kavya Iyer", note: "Adult · India · ID expired in 2024", doc: { dateOfBirth: "1988-07-07", nationality: "IN", documentExpiry: "2024-03-31" } },
-  { id: "daniel", name: "Daniel Brooks", note: "Adult · USA · ID valid", doc: { dateOfBirth: "1992-09-03", nationality: "US", documentExpiry: "2029-02-14" } },
+const RESIDENTS: { id: string; name: string; note: string; docType: string; doc: DocumentDetails }[] = [
+  { id: "asha", name: "Asha Verma", note: "Adult · India · ID valid", docType: "Aadhaar card", doc: { dateOfBirth: "1999-04-12", nationality: "IN", documentExpiry: "2031-06-30" } },
+  { id: "rohan", name: "Rohan Mehta", note: "Minor · India (born 2010)", docType: "Aadhaar card", doc: { dateOfBirth: "2010-01-20", nationality: "IN", documentExpiry: "2030-01-01" } },
+  { id: "kavya", name: "Kavya Iyer", note: "Adult · India · ID expired in 2024", docType: "PAN card", doc: { dateOfBirth: "1988-07-07", nationality: "IN", documentExpiry: "2024-03-31" } },
+  { id: "daniel", name: "Daniel Brooks", note: "Adult · USA · passport valid", docType: "Passport", doc: { dateOfBirth: "1992-09-03", nationality: "US", documentExpiry: "2029-02-14" } },
 ];
+
+/** A small text file standing in for a scanned document, so anyone can try the flow. */
+function sampleDocument(name: string, docType: string): File {
+  const text = `SATYA DEMO DOCUMENT - NOT A REAL ID\n${docType} (fictional)\nName: ${name}\nIssued by: Mock DigiLocker (demo issuer)\n`;
+  return new File([text], `${name.toLowerCase().replace(/\s+/g, "-")}-demo-${docType.toLowerCase().replace(/\s+/g, "-")}.txt`, { type: "text/plain" });
+}
+
+/* ---------------------------------------------------------------- session */
 
 interface Session {
   holder: Address;
   wallet: "metamask" | "demo";
-  /** Serialized signed claims (bigints as strings). */
-  claims: string[];
-  refused: string[];
+  identity?: string;
+  refused?: string;
 }
-const loadSession = (): Session | null => JSON.parse(sessionStorage.getItem("aletheia-session") ?? "null");
+const loadSession = (): Session | null => {
+  const s = JSON.parse(sessionStorage.getItem("aletheia-session") ?? "null") as (Session & { claims?: unknown }) | null;
+  // Sessions from the earlier claims-only version have no identity record: start fresh.
+  return s && !("claims" in s) ? s : null;
+};
 const saveSession = (s: Session | null) =>
   s ? sessionStorage.setItem("aletheia-session", JSON.stringify(s)) : sessionStorage.removeItem("aletheia-session");
 
-/** A throwaway wallet kept in this browser, for people without MetaMask. */
 function demoWallet(): Address {
-  let key = localStorage.getItem("aletheia-demo-key") as `0x${string}` | null;
+  let key = localStorage.getItem("aletheia-demo-key") as Hex | null;
   if (!key) {
     key = generatePrivateKey();
     localStorage.setItem("aletheia-demo-key", key);
@@ -92,93 +99,248 @@ async function metamask(): Promise<Address> {
   return a;
 }
 
-/* ------------------------------------------------------------------- shell */
+/* ------------------------------------------------------------------ shell */
 
-function DemoStrip() {
+function Nav({ session }: { session: Session | null }) {
   return (
-    <div className="demo-strip">
-      DEMO · Aletheia is a Satya demo site. Its sign-in uses a <b>mock DigiLocker</b>: a labelled test issuer with
-      fictional residents, not the real DigiLocker.
+    <nav className="nav">
+      <a className="logo" href="#/">
+        <span className="logo-mark" aria-hidden />
+        Aletheia
+        <span className="logo-by">by Satya</span>
+      </a>
+      <div className="nav-links">
+        <a href="#/verify">Get verified</a>
+        <a href="#/lookup">Look up</a>
+        <a href="#/document">Check a document</a>
+        {session ? (
+          <a className="nav-me" href="#/account">
+            {short(session.holder)}
+          </a>
+        ) : null}
+      </div>
+    </nav>
+  );
+}
+
+function Shell({ session, children }: { session: Session | null; children: ReactNode }) {
+  return (
+    <div className="site">
+      <div className="demo-bar">Demo network · identities come from a mock DigiLocker with fictional residents · Arkiv testnet</div>
+      <Nav session={session} />
+      <main className="wrap">{children}</main>
+      <footer className="foot">
+        <span>Aletheia × Satya</span>
+        <span>People verified here · websites verified by the Satya extension · records on Arkiv</span>
+      </footer>
     </div>
   );
 }
 
-function AletheiaHeader({ session }: { session: Session | null }) {
+/* ---------------------------------------------------------- identity card */
+
+function IdentityCard({ found, compact }: { found: { signed: SignedIdentity; ok: boolean; reason?: string; key?: string }; compact?: boolean }) {
+  const r = found.signed.record;
   return (
-    <header className="al-top">
-      <a className="al-brand" href="#/">
-        Aletheia <span>ἀλήθεια</span>
-      </a>
-      {session ? (
-        <a className="al-who" href="#/account">
-          {short(session.holder)}
+    <article className={`idcard ${found.ok ? "ok" : "bad"}`}>
+      <div className="idcard-top">
+        <div className="avatar" aria-hidden>
+          {r.name
+            .split(" ")
+            .map((p) => p[0])
+            .join("")
+            .slice(0, 2)}
+        </div>
+        <div className="idcard-who">
+          <div className="idcard-name">{r.name}</div>
+          <div className="idcard-wallet mono">{compact ? short(r.holder) : r.holder}</div>
+        </div>
+        <span className={`seal ${found.ok ? "ok" : "bad"}`}>{found.ok ? "Verified" : "Not valid"}</span>
+      </div>
+      <div className="facts">
+        {describeFacts(r.claims).map((f) => (
+          <span key={f} className="fact">
+            {f}
+          </span>
+        ))}
+      </div>
+      {!compact && (
+        <dl className="idcard-meta">
+          <div>
+            <dt>Document</dt>
+            <dd>{r.docType}</dd>
+          </div>
+          <div>
+            <dt>Fingerprint</dt>
+            <dd className="mono">{short(r.docHash, 6)}</dd>
+          </div>
+          <div>
+            <dt>Issuer</dt>
+            <dd>Mock DigiLocker (demo)</dd>
+          </div>
+          <div>
+            <dt>Valid until</dt>
+            <dd>{day(r.expiresAt)}</dd>
+          </div>
+        </dl>
+      )}
+      {!found.ok && found.reason && <p className="err">{found.reason}</p>}
+      {found.key && (
+        <a className="arkiv-link" href={`${ARKIV_EXPLORER}/entity/${found.key}`} target="_blank" rel="noreferrer">
+          Arkiv record {short(found.key)} ↗
         </a>
-      ) : null}
-    </header>
+      )}
+    </article>
   );
 }
 
-/* -------------------------------------------------------------------- home */
+/* ------------------------------------------------------------------- home */
 
-function Home({ session }: { session: Session | null }) {
+function RecentFeed() {
+  const [rows, setRows] = useState<FoundIdentity[]>();
   const [error, setError] = useState<string>();
-  const signIn = async (wallet: Session["wallet"]) => {
+  useEffect(() => {
+    findIdentities({ recent: true }, ARKIV_KEY, 6)
+      .then(setRows)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
+  if (error) return <p className="err small">Couldn't reach Arkiv: {error}</p>;
+  if (!rows) return <p className="dim small">Reading Arkiv…</p>;
+  if (!rows.length) return <p className="dim small">No one has published yet. Be the first.</p>;
+  return (
+    <ul className="feed">
+      {rows.map((f) => (
+        <li key={f.key}>
+          <a href={`#/u/${f.signed.record.holder}`}>
+            <span className={`dot ${f.check.ok ? "ok" : "bad"}`} />
+            <b>{f.signed.record.name}</b>
+            <span className="dim mono">{short(f.signed.record.holder)}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Home() {
+  const [q, setQ] = useState("");
+  return (
+    <>
+      <section className="hero">
+        <p className="eyebrow">A trust network on Arkiv</p>
+        <h1>
+          Is this <em>person</em> real?
+          <br />
+          Is this <em>site</em> real?
+        </h1>
+        <p className="lede">
+          Aletheia verifies people: a DigiLocker-style issuer signs your name and the fingerprint of the document you showed it, and
+          the record lives on Arkiv where anyone can look it up. The Satya extension verifies websites, and recognises verified
+          people on any page.
+        </p>
+        <div className="cta">
+          <a className="btn" href="#/verify">
+            Get verified
+          </a>
+          <a className="btn ghost" href="#/lookup">
+            Look someone up
+          </a>
+        </div>
+      </section>
+
+      <section className="bento">
+        <a className="tile t-verify" href="#/verify">
+          <span className="tile-k">01</span>
+          <h3>Get verified</h3>
+          <p>Sign in with mock DigiLocker, upload a document, and get a signed record of your name, bound to your wallet.</p>
+        </a>
+        <div className="tile t-search">
+          <span className="tile-k">02</span>
+          <h3>Look anyone up</h3>
+          <p>By name, wallet or document fingerprint. Straight from Arkiv, checked in your browser.</p>
+          <form
+            className="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              go(`/lookup?q=${encodeURIComponent(q)}`);
+            }}
+          >
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Asha Verma, 0x…" />
+            <button>Search</button>
+          </form>
+        </div>
+        <a className="tile t-doc" href="#/document">
+          <span className="tile-k">03</span>
+          <h3>Is this document the one that was verified?</h3>
+          <p>Drop a file. It's fingerprinted on your device and matched against Arkiv. The file never leaves your browser.</p>
+        </a>
+        <div className="tile t-ext">
+          <span className="tile-k">04</span>
+          <h3>Satya extension</h3>
+          <p>Scores any website 0–100 with reasons, from scam lists on Arkiv to domain age and ENS. Wallets on a page that belong to verified people show up by name.</p>
+        </div>
+        <div className="tile t-feed">
+          <span className="tile-k">Live</span>
+          <h3>Recently verified</h3>
+          <RecentFeed />
+        </div>
+        <div className="tile t-privacy">
+          <span className="tile-k">Public vs private</span>
+          <div className="split">
+            <div>
+              <b>On Arkiv</b>
+              <p>Name, wallet, document type, document fingerprint, the issuer's signature.</p>
+            </div>
+            <div>
+              <b>Never stored</b>
+              <p>The document, date of birth, ID number, address, photo.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ----------------------------------------------------------------- verify */
+
+function Verify({ session }: { session: Session | null }) {
+  const [error, setError] = useState<string>();
+  const start = async (wallet: Session["wallet"]) => {
     try {
       setError(undefined);
       const holder = wallet === "metamask" ? await metamask() : demoWallet();
       const state = crypto.randomUUID();
       sessionStorage.setItem("aletheia-state", JSON.stringify({ state, holder, wallet }));
-      const q = new URLSearchParams({ client_id: "aletheia", scope: SCOPE.join(" "), holder, state });
-      go(`/mock-digilocker/authorize?${q}`);
+      go(`/mock-digilocker/authorize?${new URLSearchParams({ client_id: "aletheia", scope: "identity", holder, state })}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
   return (
-    <main className="al">
-      <AletheiaHeader session={session} />
-      <section className="al-hero">
-        <h1>Prove a fact about yourself, not your documents.</h1>
-        <p>
-          Aletheia only needs to know that you're <b>18+</b>, your <b>nationality</b>, and that your <b>ID is valid</b>. Sign in
-          with DigiLocker and it gets exactly that: three signed yes/no claims, bound to your wallet. Never your name, date of
-          birth or ID number.
+    <section className="panel narrow">
+      <p className="eyebrow">Get verified</p>
+      <h2>Sign in with DigiLocker (mock)</h2>
+      <p className="dim">
+        You'll pick a fictional resident, upload a document, and approve what's shared. The issuer signs your name, the document's
+        fingerprint and the facts it confirms, bound to your wallet.
+      </p>
+      {session?.identity && (
+        <p className="note">
+          You're already verified in this tab. <a href="#/account">See your record</a>.
         </p>
-        {session ? (
-          <button className="al-btn" onClick={() => go("/account")}>
-            Go to your account
-          </button>
-        ) : (
-          <div className="al-signin">
-            <button className="al-btn dl" onClick={() => void signIn("metamask")}>
-              Sign in with DigiLocker (mock) · MetaMask wallet
-            </button>
-            <button className="al-btn ghost" onClick={() => void signIn("demo")}>
-              Sign in with DigiLocker (mock) · demo wallet
-            </button>
-            <p className="al-note">
-              The claims are issued to a wallet so you can carry them to other sites. No MetaMask? The demo wallet is a key
-              kept in this browser.
-            </p>
-          </div>
-        )}
-        {error && <p className="al-error">{error}</p>}
-      </section>
-      <section className="al-steps">
-        <div>
-          <b>1. Sign in</b>
-          <p>You pick a resident on the mock DigiLocker and approve what Aletheia may see.</p>
-        </div>
-        <div>
-          <b>2. Signed claims</b>
-          <p>The issuer signs only the claims that are true (EIP-712), each to your wallet, each with an expiry.</p>
-        </div>
-        <div>
-          <b>3. Check anywhere</b>
-          <p>Publish them to Arkiv and any site, or Satya's extension, can verify them without asking you again.</p>
-        </div>
-      </section>
-    </main>
+      )}
+      <div className="stack">
+        <button className="btn" onClick={() => void start("metamask")}>
+          Continue with MetaMask
+        </button>
+        <button className="btn ghost" onClick={() => void start("demo")}>
+          Continue with a demo wallet
+        </button>
+      </div>
+      <p className="dim small">Publishing to Arkiv needs MetaMask with a little test GLM. A demo wallet can sign in and see its record, but not publish.</p>
+      {error && <p className="err">{error}</p>}
+    </section>
   );
 }
 
@@ -186,54 +348,48 @@ function Home({ session }: { session: Session | null }) {
 
 function MockDigiLocker({ params }: { params: URLSearchParams }) {
   const [resident, setResident] = useState<(typeof RESIDENTS)[number]>();
+  const [file, setFile] = useState<File>();
+  const [hash, setHash] = useState<Hex>();
   const [busy, setBusy] = useState(false);
-  const client = params.get("client_id") ?? "";
   const holder = params.get("holder") ?? "";
   const state = params.get("state") ?? "";
-  const scope = (params.get("scope") ?? "").split(/[ +]/).filter((s): s is ClaimId => s in CLAIM_LABELS);
   const back = (q: Record<string, string>) => go(`/callback?${new URLSearchParams({ ...q, state })}`);
 
-  if (client !== "aletheia" || !isAddress(holder) || !state || !scope.length) {
+  useEffect(() => {
+    setHash(undefined);
+    if (file) void file.arrayBuffer().then(fingerprint).then(setHash);
+  }, [file]);
+
+  if (params.get("client_id") !== "aletheia" || !isAddress(holder) || !state) {
     return (
-      <main className="dl-page">
+      <div className="dl-page">
         <div className="dl-card">
           <h2>Invalid sign-in request</h2>
-          <p>This request is missing the app, wallet or permissions it needs.</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   const allow = async () => {
-    if (!resident) return;
+    if (!resident || !hash) return;
     setBusy(true);
-    const signed: string[] = [];
-    const refused: string[] = [];
-    for (const c of scope) {
-      try {
-        signed.push(serializeAttestation(await issueClaim(holder, c, resident.doc)));
-      } catch (e) {
-        refused.push(`${CLAIM_NAME[c]}: ${e instanceof ClaimRefusedError ? e.message : String(e)}`);
-      }
+    let identity: string | undefined;
+    let refused: string | undefined;
+    try {
+      identity = serializeIdentity(await issueIdentity(holder, resident, resident.docType, hash));
+    } catch (e) {
+      refused = e instanceof ClaimRefusedError ? e.message : String(e);
     }
-    // Stands in for the OAuth code exchange: Aletheia redeems the code for the signed claims.
+    // Stands in for the OAuth code exchange.
     const code = crypto.randomUUID();
-    sessionStorage.setItem(`dl-code-${code}`, JSON.stringify({ signed, refused }));
+    sessionStorage.setItem(`dl-code-${code}`, JSON.stringify({ identity, refused }));
     back({ code });
   };
 
-  const LABEL: Record<ClaimId, string> = {
-    age_over_18: "Whether you are 18 or older (yes/no)",
-    nationality: "Your nationality",
-    id_valid: "Whether your ID document is valid (yes/no)",
-  };
-
+  const step = !resident ? 1 : !hash ? 2 : 3;
   return (
-    <main className="dl-page">
-      <div className="dl-strip">
-        MOCK DIGILOCKER · demo issuer for Satya. Not the real DigiLocker or any government service. Fictional residents only;
-        nothing here is sent anywhere.
-      </div>
+    <div className="dl-page">
+      <div className="dl-strip">MOCK DIGILOCKER · demo issuer for Satya · not the real DigiLocker or any government service · fictional residents only</div>
       <div className="dl-card">
         <div className="dl-head">
           <span className="dl-logo" aria-hidden>
@@ -241,14 +397,13 @@ function MockDigiLocker({ params }: { params: URLSearchParams }) {
           </span>
           <div>
             <div className="dl-title">Mock DigiLocker</div>
-            <div className="dl-sub">Demo issuer {short("0x48D49a2bF3766cC742CDeA811a6c40F2f40F9BaB")}</div>
+            <div className="dl-sub">Demo issuer 0x48D4…9BaB · step {step} of 3</div>
           </div>
         </div>
 
-        {!resident ? (
+        {step === 1 && (
           <>
             <h2>Sign in as a test resident</h2>
-            <p className="dl-muted">Choose a fictional person. Each one shows a different outcome.</p>
             <ul className="dl-residents">
               {RESIDENTS.map((r) => (
                 <li key={r.id}>
@@ -260,23 +415,56 @@ function MockDigiLocker({ params }: { params: URLSearchParams }) {
               ))}
             </ul>
             <button className="dl-link" onClick={() => back({ error: "access_denied" })}>
-              Cancel and go back to Aletheia
+              Cancel
             </button>
           </>
-        ) : (
+        )}
+
+        {resident && step === 2 && (
+          <>
+            <h2>Upload your {resident.docType}</h2>
+            <p className="dl-muted">
+              The file is fingerprinted (SHA-256) in this browser. Only the fingerprint is signed; the file isn't uploaded anywhere.
+            </p>
+            <label className="dl-drop">
+              <input type="file" onChange={(e) => setFile(e.target.files?.[0])} />
+              {file ? <>Reading {file.name}…</> : <>Choose a file (PDF, image, anything)</>}
+            </label>
+            <button className="dl-link" onClick={() => setFile(sampleDocument(resident.name, resident.docType))}>
+              No file? Use a sample demo document
+            </button>
+          </>
+        )}
+
+        {resident && file && hash && (
           <>
             <h2>
-              <b>Aletheia</b> wants to know
+              <b>Aletheia</b> wants to verify you
             </h2>
-            <p className="dl-muted">Signed in as {resident.name} (fictional).</p>
+            <div className="dl-file">
+              <b>{file.name}</b>
+              <span>
+                {(file.size / 1024).toFixed(1)} KB · SHA-256 <span className="mono">{short(hash, 6)}</span>
+              </span>
+              {file.name.includes("-demo-") && (
+                <a
+                  href={URL.createObjectURL(file)}
+                  download={file.name}
+                  className="dl-link"
+                  title="Keep it to test 'Check a document' later"
+                >
+                  Download this sample
+                </a>
+              )}
+            </div>
+            <p className="dl-muted">If you allow, the issuer signs and Aletheia may publish publicly:</p>
             <ul className="dl-scope">
-              {scope.map((c) => (
-                <li key={c}>✓ {LABEL[c]}</li>
-              ))}
+              <li>✓ Your name: {resident.name}</li>
+              <li>✓ Document type and its fingerprint</li>
+              <li>✓ Facts: 18+ (yes/no), nationality, ID valid</li>
             </ul>
             <p className="dl-muted">
-              Aletheia will <b>not</b> see your name, date of birth, Aadhaar number, address or the document itself. Claims are
-              issued to wallet <span className="mono">{short(holder)}</span> and expire with your ID.
+              Never shared: date of birth, ID number, address, the document itself. Bound to wallet <span className="mono">{short(holder)}</span>.
             </p>
             <div className="dl-actions">
               <button className="dl-allow" disabled={busy} onClick={() => void allow()}>
@@ -286,225 +474,257 @@ function MockDigiLocker({ params }: { params: URLSearchParams }) {
                 Deny
               </button>
             </div>
-            <button className="dl-link" onClick={() => setResident(undefined)}>
-              Not {resident.name.split(" ")[0]}? Choose another resident
-            </button>
           </>
         )}
+        {resident && (
+          <button
+            className="dl-link"
+            onClick={() => {
+              setResident(undefined);
+              setFile(undefined);
+            }}
+          >
+            Start over
+          </button>
+        )}
       </div>
-    </main>
+    </div>
   );
 }
 
 /* --------------------------------------------------------------- callback */
 
-function Callback({ params }: { params: URLSearchParams }) {
+function Callback({ params, onDone }: { params: URLSearchParams; onDone: () => void }) {
   const [error, setError] = useState<string>();
   useEffect(() => {
     void (async () => {
-      const expected = JSON.parse(sessionStorage.getItem("aletheia-state") ?? "null") as
-        | { state: string; holder: Address; wallet: Session["wallet"] }
-        | null;
+      const expected = JSON.parse(sessionStorage.getItem("aletheia-state") ?? "null") as { state: string; holder: Address; wallet: Session["wallet"] } | null;
       sessionStorage.removeItem("aletheia-state");
-      if (!expected || params.get("state") !== expected.state) return setError("This sign-in didn't start here (state mismatch).");
-      if (params.get("error")) return setError("You cancelled the sign-in at DigiLocker.");
+      if (!expected || params.get("state") !== expected.state) return setError("This sign-in didn't start here.");
+      if (params.get("error")) return setError("You cancelled at DigiLocker.");
       const code = params.get("code") ?? "";
       const raw = sessionStorage.getItem(`dl-code-${code}`);
       sessionStorage.removeItem(`dl-code-${code}`);
-      if (!raw) return setError("That sign-in code was already used or is unknown.");
-      const { signed, refused } = JSON.parse(raw) as { signed: string[]; refused: string[] };
-      // Never trust what came back: check every signature, issuer, holder and expiry.
-      const good: string[] = [];
-      for (const s of signed) {
-        const v = await verifyAttestation(parseAttestation(s), expected.holder);
-        if (v.ok) good.push(s);
-        else refused.push(`A claim failed verification: ${v.reason}`);
+      if (!raw) return setError("That sign-in code was already used.");
+      const { identity, refused } = JSON.parse(raw) as { identity?: string; refused?: string };
+      let accepted: string | undefined;
+      let why = refused;
+      if (identity) {
+        // Never trust what came back: check signature, issuer, wallet and expiry.
+        const v = await verifyIdentity(parseIdentity(identity), expected.holder);
+        if (v.ok) accepted = identity;
+        else why = `The signed record failed verification: ${v.reason}`;
       }
-      saveSession({ holder: expected.holder, wallet: expected.wallet, claims: good, refused });
+      saveSession({ holder: expected.holder, wallet: expected.wallet, identity: accepted, refused: why });
+      onDone();
       go("/account");
     })();
   }, [params]);
-  return (
-    <main className="al">
-      <AletheiaHeader session={null} />
-      <section className="al-card">{error ? <p className="al-error">{error}</p> : <p>Checking the signed claims…</p>}</section>
-      {error && (
-        <button className="al-btn ghost" onClick={() => go("/")}>
-          Back to Aletheia
-        </button>
-      )}
-    </main>
-  );
+  return <section className="panel narrow">{error ? <p className="err">{error}</p> : <p>Checking the signed record…</p>}</section>;
 }
 
 /* ---------------------------------------------------------------- account */
 
-function ClaimRow({ s }: { s: SignedAttestation }) {
-  const a = s.attestation;
-  return (
-    <li className="al-claim ok">
-      <span className="al-tick">✓</span>
-      <div>
-        <b>{CLAIM_LABELS[a.claim](a.value)}</b>
-        <div className="al-small">
-          Mock DigiLocker (demo issuer) · valid until {new Date(Number(a.expiresAt) * 1000).toISOString().slice(0, 10)}
-        </div>
-      </div>
-    </li>
-  );
-}
-
 function Account({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
-  const claims = session.claims.map(parseAttestation);
-  const adult = claims.some((c) => c.attestation.claim === "age_over_18");
-  const [published, setPublished] = useState<{ claim: ClaimId; key: string }[]>([]);
+  const signed = session.identity ? parseIdentity(session.identity) : undefined;
+  const [published, setPublished] = useState<{ key: string; tx: string }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-
   const publish = async () => {
+    if (!signed) return;
     setBusy(true);
     setError(undefined);
     try {
       if (!window.ethereum) throw new Error("Publishing needs MetaMask.");
       const writer = await arkivBrowserWriter(window.ethereum, session.holder, ARKIV_KEY);
-      const done: typeof published = [];
-      for (const s of claims) {
-        const r = await publishAttestation(writer, s);
-        done.push({ claim: s.attestation.claim, key: r.entityKey });
-        setPublished([...done]);
-      }
+      const r = await publishIdentity(writer, signed);
+      setPublished({ key: r.entityKey, tx: r.txHash });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof Error ? e.message.split("\n")[0]! : String(e));
     } finally {
       setBusy(false);
     }
   };
-
+  const adult = signed?.record.claims.split(",").includes("age_over_18");
   return (
-    <main className="al">
-      <AletheiaHeader session={session} />
-      <section className="al-card">
-        <div className="al-eyebrow">Signed in with Mock DigiLocker</div>
-        <h2 className="mono">{session.holder}</h2>
-        <p className="al-small">{session.wallet === "demo" ? "Demo wallet kept in this browser" : "MetaMask wallet"}</p>
-
-        <h3>What Aletheia knows about you</h3>
-        {claims.length ? (
-          <ul className="al-claims">
-            {claims.map((s) => (
-              <ClaimRow key={s.attestation.claim} s={s} />
-            ))}
-          </ul>
-        ) : (
-          <p>Nothing: DigiLocker issued no claims.</p>
-        )}
-        {session.refused.length > 0 && (
-          <ul className="al-claims">
-            {session.refused.map((r) => (
-              <li key={r} className="al-claim bad">
-                <span className="al-tick">✕</span>
-                <div>{r}</div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="al-small">
-          That's all: no name, no date of birth, no ID number. Each claim is signed by the issuer and checked here before it
-          was accepted.
-        </p>
+    <div className="grid2">
+      <section className="panel">
+        <p className="eyebrow">Your verified record</p>
+        {signed ? <IdentityCard found={{ signed, ok: true }} /> : <p className="err">No record: {session.refused}</p>}
+        <p className="dim small">Signed by the mock issuer and checked in your browser before Aletheia accepted it.</p>
       </section>
-
-      <section className={`al-card gate ${adult ? "open" : "shut"}`}>
-        <h3>{adult ? "18+ community: unlocked" : "18+ community: locked"}</h3>
-        <p>{adult ? "Your 18+ claim opens this area. Aletheia never learned your age." : "This area needs a valid 18+ claim from DigiLocker."}</p>
-      </section>
-
-      <section className="al-card">
-        <h3>Carry it to other sites</h3>
-        <p className="al-small">
-          Publishing puts each signed claim on Arkiv, owned by your wallet. Anyone (another site, or Satya's extension) can then
-          check it against the issuer's signature without asking you again.
-        </p>
-        <div className="al-row">
-          <button className="al-btn" disabled={busy || !claims.length || session.wallet !== "metamask"} onClick={() => void publish()}>
-            {busy ? "Publishing…" : "Publish proofs to Arkiv"}
+      <div className="stack">
+        <section className="panel">
+          <p className="eyebrow">Make it findable</p>
+          <h3>Publish to Arkiv</h3>
+          <p className="dim small">One record, owned by your wallet, searchable by name, wallet or document fingerprint. Anyone can verify the issuer's signature.</p>
+          <button className="btn" disabled={busy || !signed || session.wallet !== "metamask" || !!published} onClick={() => void publish()}>
+            {published ? "Published" : busy ? "Publishing…" : "Publish my record"}
           </button>
-          <button className="al-btn ghost" onClick={() => go(`/u/${session.holder}`)}>
-            Public profile
-          </button>
-        </div>
-        {session.wallet !== "metamask" && <p className="al-small">Publishing needs MetaMask (it pays a little test GLM on Arkiv).</p>}
-        {published.map((p) => (
-          <p key={p.key} className="al-small">
-            ✓ {CLAIM_NAME[p.claim]} on Arkiv:{" "}
-            <a href={`${ARKIV_EXPLORER}/entity/${p.key}`} target="_blank" rel="noreferrer">
-              {short(p.key)} ↗
-            </a>
-          </p>
-        ))}
-        {error && <p className="al-error">{error}</p>}
-      </section>
-      <button className="al-btn ghost" onClick={onSignOut}>
-        Sign out
-      </button>
-    </main>
+          {session.wallet !== "metamask" && <p className="dim small">Needs MetaMask (a little test GLM on Arkiv).</p>}
+          {published && (
+            <p className="ok small">
+              ✓ On Arkiv:{" "}
+              <a href={`${ARKIV_EXPLORER}/entity/${published.key}`} target="_blank" rel="noreferrer">
+                {short(published.key)} ↗
+              </a>{" "}
+              · <a href={`#/u/${session.holder}`}>public profile</a>
+            </p>
+          )}
+          {error && <p className="err small">{error}</p>}
+        </section>
+        <section className={`panel gate ${adult ? "open" : "shut"}`}>
+          <p className="eyebrow">Example: an 18+ area</p>
+          <h3>{adult ? "Unlocked" : "Locked"}</h3>
+          <p className="dim small">{adult ? "Your record says 18+. Aletheia never saw your date of birth." : "Needs a verified 18+ record."}</p>
+        </section>
+        <button className="btn ghost" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+    </div>
   );
 }
 
-/* ---------------------------------------------------------- public profile */
+/* ----------------------------------------------------------------- lookup */
 
-function Profile({ address, session }: { address: string; session: Session | null }) {
-  const [rows, setRows] = useState<{ key: string; label: string; ok: boolean; detail: string }[]>();
+function Results({ rows }: { rows?: FoundIdentity[] }) {
+  if (!rows) return <p className="dim">Searching Arkiv…</p>;
+  if (!rows.length) return <p className="dim">No verified record found.</p>;
+  return (
+    <div className="results">
+      {rows.map((f) => (
+        <a key={f.key} className="result-link" href={`#/u/${f.signed.record.holder}`}>
+          <IdentityCard found={{ signed: f.signed, ok: f.check.ok, reason: f.check.ok ? undefined : f.check.reason, key: f.key }} compact />
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function Lookup({ params }: { params: URLSearchParams }) {
+  const initial = params.get("q") ?? "";
+  const [q, setQ] = useState(initial);
+  const [rows, setRows] = useState<FoundIdentity[]>();
+  const [error, setError] = useState<string>();
+  const [asked, setAsked] = useState(initial);
+  useEffect(() => {
+    const v = asked.trim();
+    setError(undefined);
+    setRows(undefined);
+    const query = !v
+      ? ({ recent: true } as const)
+      : /^0x[0-9a-fA-F]{64}$/.test(v)
+        ? { docHash: v as Hex }
+        : isAddress(v)
+          ? { holder: v as Address }
+          : { name: v };
+    findIdentities(query, ARKIV_KEY)
+      .then(setRows)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [asked]);
+  return (
+    <section className="panel">
+      <p className="eyebrow">Look up</p>
+      <h2>Who's verified?</h2>
+      <form
+        className="search big"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setAsked(q);
+          history.replaceState(null, "", `#/lookup?q=${encodeURIComponent(q)}`);
+        }}
+      >
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Full name, wallet address, or document fingerprint" autoFocus />
+        <button>Search</button>
+      </form>
+      <p className="dim small">
+        {asked.trim() ? "Exact name match (not case-sensitive)." : "Showing the most recent records."} Results come straight from Arkiv; each signature
+        and owner is checked in your browser.
+      </p>
+      {error ? <p className="err">{error}</p> : <Results rows={rows} />}
+    </section>
+  );
+}
+
+/* --------------------------------------------------------------- document */
+
+function DocumentCheck() {
+  const [file, setFile] = useState<File>();
+  const [hash, setHash] = useState<Hex>();
+  const [rows, setRows] = useState<FoundIdentity[]>();
+  const [error, setError] = useState<string>();
+  const [drag, setDrag] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!file) return;
+    setRows(undefined);
+    setError(undefined);
+    void file
+      .arrayBuffer()
+      .then(fingerprint)
+      .then((h) => {
+        setHash(h);
+        return findIdentities({ docHash: h }, ARKIV_KEY);
+      })
+      .then(setRows)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [file]);
+  return (
+    <section className="panel">
+      <p className="eyebrow">Check a document</p>
+      <h2>Was this exact file verified?</h2>
+      <div
+        className={`drop ${drag ? "over" : ""}`}
+        onClick={() => input.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDrag(true);
+        }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          setFile(e.dataTransfer.files[0]);
+        }}
+      >
+        <input ref={input} type="file" hidden onChange={(e) => setFile(e.target.files?.[0])} />
+        {file ? (
+          <>
+            <b>{file.name}</b>
+            <span className="mono small">{hash ? `SHA-256 ${hash}` : "Fingerprinting…"}</span>
+          </>
+        ) : (
+          <>
+            <b>Drop a file here</b>
+            <span className="dim small">or click to choose. It's fingerprinted on your device and never uploaded.</span>
+          </>
+        )}
+      </div>
+      {error && <p className="err">{error}</p>}
+      {hash && (rows?.length === 0 ? <p className="dim">No verified record uses this exact file. Even a one-byte change gives a different fingerprint.</p> : <Results rows={rows} />)}
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- profile */
+
+function Profile({ address }: { address: string }) {
+  const [rows, setRows] = useState<FoundIdentity[]>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     if (!isAddress(address)) return setError("Not a wallet address.");
-    void (async () => {
-      try {
-        const records = await fetchProofRecords(address, ARKIV_KEY);
-        const out: NonNullable<typeof rows> = [];
-        for (const r of records) {
-          if (!r.signed) continue;
-          const v = await verifyAttestation(r.signed, address);
-          const a = r.signed.attestation;
-          out.push({ key: r.key, label: CLAIM_LABELS[a.claim](a.value), ok: v.ok, detail: v.ok ? v.issuer.name : v.reason });
-        }
-        setRows(out);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
+    findIdentities({ holder: address }, ARKIV_KEY)
+      .then(setRows)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [address]);
   return (
-    <main className="al">
-      <AletheiaHeader session={session} />
-      <section className="al-card">
-        <div className="al-eyebrow">Aletheia member</div>
-        <h2 className="mono">{address}</h2>
-        <h3>Verified on Arkiv</h3>
-        {error && <p className="al-error">{error}</p>}
-        {!rows && !error && <p>Loading proofs from Arkiv…</p>}
-        {rows && !rows.length && <p>No DigiLocker claims published from this wallet yet.</p>}
-        {rows && rows.length > 0 && (
-          <ul className="al-claims">
-            {rows.map((r) => (
-              <li key={r.key} className={`al-claim ${r.ok ? "ok" : "bad"}`}>
-                <span className="al-tick">{r.ok ? "✓" : "✕"}</span>
-                <div>
-                  <b>{r.label}</b>
-                  <div className="al-small">
-                    {r.detail} ·{" "}
-                    <a href={`${ARKIV_EXPLORER}/entity/${r.key}`} target="_blank" rel="noreferrer">
-                      Arkiv record ↗
-                    </a>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="al-small">Checked in your browser: each record's signature must come from a trusted issuer and name this wallet.</p>
-      </section>
-    </main>
+    <section className="panel">
+      <p className="eyebrow">Profile</p>
+      {/* The wallet is written out in full so the Satya extension can recognise it on this page. */}
+      <h2 className="mono wallet-h">{address}</h2>
+      {error ? <p className="err">{error}</p> : <Results rows={rows} />}
+    </section>
   );
 }
 
@@ -513,11 +733,16 @@ function Profile({ address, session }: { address: string; session: Session | nul
 export function App() {
   const route = useRoute();
   const [session, setSession] = useState(loadSession);
-  useEffect(() => setSession(loadSession()), [route]);
+  const refresh = () => setSession(loadSession());
 
-  let page: JSX.Element;
-  if (route.path === "/mock-digilocker/authorize") page = <MockDigiLocker params={route.params} />;
-  else if (route.path === "/callback") page = <Callback params={route.params} />;
+  if (route.path === "/mock-digilocker/authorize") return <MockDigiLocker params={route.params} />;
+
+  let page: ReactNode;
+  if (route.path === "/callback") page = <Callback params={route.params} onDone={refresh} />;
+  else if (route.path === "/verify") page = <Verify session={session} />;
+  else if (route.path === "/lookup") page = <Lookup params={route.params} />;
+  else if (route.path === "/document") page = <DocumentCheck />;
+  else if (route.path.startsWith("/u/")) page = <Profile address={route.path.slice(3)} />;
   else if (route.path === "/account" && session)
     page = (
       <Account
@@ -529,14 +754,6 @@ export function App() {
         }}
       />
     );
-  else if (route.path.startsWith("/u/")) page = <Profile address={route.path.slice(3)} session={session} />;
-  else page = <Home session={session} />;
-
-  return (
-    <>
-      <DemoStrip />
-      {page}
-      <footer className="al-foot">Aletheia is part of Satya · ETHGlobal Mumbai 2026 · demo data only</footer>
-    </>
-  );
+  else page = <Home />;
+  return <Shell session={session}>{page}</Shell>;
 }
