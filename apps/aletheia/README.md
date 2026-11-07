@@ -56,7 +56,7 @@ browser (`sessionStorage`) instead of a server call.
 ## Design
 
 A consumer trust-check site, after ScamAdviser's layout (not its brand): a floating white
-nav card with a search pill, a dark hero with one big search, and results on white cards.
+nav card with a search pill, a dark hero with our own headline ("Trust the proof, not the profile.") and one big search, and results on white cards.
 Each person's report has a gauge of the checks that passed (owner, issuer signature, expiry),
 green **positive highlights**, a red **watch out for** list (always including that the issuer
 is a demo with fictional residents), document details and a barcode drawn from the document's

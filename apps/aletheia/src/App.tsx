@@ -484,9 +484,9 @@ function Home() {
       <section className="hero">
         <div className="hero-in">
           <h1>
-            Is this person real?
+            Trust the <span className="hl-word">proof</span>,
             <br />
-            <span className="slash">/</span>Check before you trust.
+            not the profile.
           </h1>
           <SearchPill big />
           <p className="hero-sub">
