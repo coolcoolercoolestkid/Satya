@@ -131,48 +131,87 @@ function useArkivBlock() {
   return block;
 }
 
+function Logo() {
+  return (
+    <a className="logo" href="#/">
+      <span className="logo-mark" aria-hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" fill="currentColor" />
+          <path d="m8.5 12 2.4 2.4L15.8 9.5" stroke="#fff" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <span className="logo-word">
+        ALETHEIA<span className="logo-by">by Satya</span>
+      </span>
+    </a>
+  );
+}
+
+function SearchPill({ big = false, initial = "", onSearch }: { big?: boolean; initial?: string; onSearch?: (q: string) => void }) {
+  const [q, setQ] = useState(initial);
+  return (
+    <form
+      className={`pill ${big ? "big" : ""}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (onSearch) onSearch(q);
+        else go(`/lookup?q=${encodeURIComponent(q)}`);
+      }}
+    >
+      <svg className="pill-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+        <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" fill="none" />
+        <path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Paste a name, wallet address or document fingerprint" spellCheck={false} />
+      <button aria-label="Check">{big ? "Check" : "→"}</button>
+    </form>
+  );
+}
+
 function Nav({ session }: { session: Session | null }) {
   const block = useArkivBlock();
   return (
-    <header className="nav">
-      <a className="logo" href="#/">
-        <span className="logo-glyph" aria-hidden>
-          Α
-        </span>
-        <span>ALETHEIA</span>
-        <span className="logo-sub">/ SATYA NETWORK</span>
-      </a>
-      <nav className="nav-links">
-        <a href="#/verify">[01] Verify</a>
-        <a href="#/lookup">[02] Query</a>
-        <a href="#/document">[03] Document</a>
-      </nav>
-      <div className="nav-right">
+    <div className="nav-wrap">
+      <header className="nav">
+        <Logo />
+        <div className="nav-search">
+          <SearchPill />
+        </div>
+        <nav className="nav-links">
+          <a href="#/verify">Get verified</a>
+          <a href="#/lookup">Look up</a>
+          <a href="#/document">Check a document</a>
+        </nav>
         <span className="live" title="Arkiv Rabdi testnet, read live">
           <span className="pulse" aria-hidden />
-          ARKIV {block ? `#${block.toLocaleString()}` : "…"}
+          Arkiv {block ? `#${block.toLocaleString()}` : "…"}
         </span>
         {session ? (
           <a className="nav-me" href="#/account">
             {short(session.holder)}
           </a>
-        ) : null}
-      </div>
-    </header>
+        ) : (
+          <a className="nav-cta" href="#/verify">
+            Sign in
+          </a>
+        )}
+      </header>
+    </div>
   );
 }
 
-function Shell({ session, children }: { session: Session | null; children: ReactNode }) {
+function Shell({ session, dark, children }: { session: Session | null; dark?: boolean; children: ReactNode }) {
   return (
-    <div className="site">
-      <div className="grid-bg" aria-hidden />
-      <div className="demo-bar">DEMO NETWORK — identities come from a mock DigiLocker with fictional residents — Arkiv testnet</div>
+    <div className={`site ${dark ? "has-hero" : ""}`}>
+      <div className="demo-bar">Demo network · identities come from a mock DigiLocker with fictional residents · records on Arkiv testnet</div>
       <Nav session={session} />
-      <main className="wrap">{children}</main>
+      <main>{children}</main>
       <footer className="foot">
-        <span>ALETHEIA × SATYA</span>
-        <span>PEOPLE → ALETHEIA · WEBSITES → SATYA EXTENSION · RECORDS → ARKIV</span>
-        <span>NO INDEXER · NO SERVER · VERIFIED IN YOUR BROWSER</span>
+        <div className="foot-in">
+          <Logo />
+          <p>People are verified here. Websites are verified by the Satya browser extension. Every record lives on Arkiv and is re-checked in your browser.</p>
+          <span>No server · no indexer · ETHGlobal Mumbai 2026</span>
+        </div>
       </footer>
     </div>
   );
@@ -197,50 +236,111 @@ function Barcode({ hash }: { hash: string }) {
   );
 }
 
+/** Semicircle gauge: how many of the three checks passed (owner, signature, expiry). */
+function Gauge({ passed, total, ok }: { passed: number; total: number; ok: boolean }) {
+  const r = 52;
+  const len = Math.PI * r;
+  return (
+    <div className={`gauge ${ok ? "ok" : "bad"}`}>
+      <svg viewBox="0 0 128 72" width="128" height="72" aria-label={`${passed} of ${total} checks passed`}>
+        <path d="M12 66 A52 52 0 0 1 116 66" className="g-track" />
+        <path d="M12 66 A52 52 0 0 1 116 66" className="g-arc" strokeDasharray={`${(passed / total) * len} ${len}`} />
+      </svg>
+      <div className="g-num">
+        {passed}/{total}
+      </div>
+      <div className="g-label">{ok ? "Verified" : "Not valid"}</div>
+    </div>
+  );
+}
+
 function IdentityCard({ found, compact }: { found: { signed: SignedIdentity; ok: boolean; reason?: string; key?: string }; compact?: boolean }) {
   const r = found.signed.record;
+  const initials = r.name
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2);
+  const positives = found.ok
+    ? [
+        "Signed by Mock DigiLocker (demo issuer)",
+        "Record is owned by the wallet it names",
+        `Valid until ${day(r.expiresAt)}`,
+        `Checked against ${/^[AEIOU]/i.test(r.docType) ? "an" : "a"} ${r.docType} (SHA-256 fingerprint)`,
+      ]
+    : [];
+  const negatives = [
+    ...(found.ok ? [] : [found.reason ?? "Failed verification"]),
+    "Demo issuer: fictional resident, not a real-world identity check",
+  ];
   return (
-    <article className={`pass ${found.ok ? "ok" : "bad"} ${compact ? "compact" : ""}`}>
-      <span className="corner tl" />
-      <span className="corner tr" />
-      <span className="corner bl" />
-      <span className="corner br" />
-      <div className="pass-head">
-        <span className="pass-kind">IDENTITY / {r.docType.toUpperCase()}</span>
-        <span className={`status ${found.ok ? "ok" : "bad"}`}>{found.ok ? "● VERIFIED" : "✕ INVALID"}</span>
-      </div>
-      <div className="pass-name">{r.name}</div>
-      <div className="pass-wallet mono">{compact ? short(r.holder, 6) : r.holder}</div>
-      <div className="facts">
-        {describeFacts(r.claims).map((f) => (
-          <span key={f} className="fact">
-            {f}
-          </span>
-        ))}
+    <article className={`card idc ${found.ok ? "ok" : "bad"} ${compact ? "compact" : ""}`}>
+      <div className="idc-top">
+        <div className="avatar" aria-hidden>
+          {initials}
+        </div>
+        <div className="idc-who">
+          <div className="idc-name">
+            {r.name}
+            <span className={`badge ${found.ok ? "ok" : "bad"}`}>{found.ok ? "✓ Verified" : "✕ Invalid"}</span>
+          </div>
+          <div className="idc-wallet mono">{compact ? short(r.holder, 6) : r.holder}</div>
+          <div className="facts">
+            {describeFacts(r.claims).map((f) => (
+              <span key={f} className="fact">
+                {f}
+              </span>
+            ))}
+          </div>
+        </div>
+        <Gauge passed={found.ok ? 3 : 0} total={3} ok={found.ok} />
       </div>
       {!compact && (
-        <dl className="pass-meta">
+        <div className="hl">
+          <div className="hl-col">
+            <div className="hl-head pos">Positive highlights</div>
+            <ul>
+              {positives.map((p) => (
+                <li key={p} className="pos">
+                  {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="hl-col">
+            <div className="hl-head neg">Watch out for</div>
+            <ul>
+              {negatives.map((p) => (
+                <li key={p} className="neg">
+                  {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      {!compact && (
+        <dl className="idc-meta">
           <div>
-            <dt>ISSUER</dt>
-            <dd>Mock DigiLocker (demo)</dd>
+            <dt>Document</dt>
+            <dd>{r.docType}</dd>
           </div>
           <div>
-            <dt>VALID UNTIL</dt>
+            <dt>Valid until</dt>
             <dd>{day(r.expiresAt)}</dd>
           </div>
           <div className="wide">
-            <dt>DOCUMENT SHA-256</dt>
+            <dt>Document SHA-256</dt>
             <dd className="mono">{r.docHash}</dd>
           </div>
         </dl>
       )}
       <Barcode hash={r.docHash} />
-      {!found.ok && found.reason && <p className="err">{found.reason}</p>}
       {found.key && (
-        <span className="pass-key mono">
-          ARKIV ENTITY {short(found.key, 6)}{" "}
+        <span className="idc-key mono">
+          Arkiv entity {short(found.key, 6)}{" "}
           <a href={`${ARKIV_EXPLORER}/entity/${found.key}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-            ↗
+            view ↗
           </a>
         </span>
       )}
@@ -252,7 +352,7 @@ function IdentityCard({ found, compact }: { found: { signed: SignedIdentity; ok:
 
 type Line = { kind: "cmd" | "out" | "ok" | "err"; text: string };
 
-/** Runs a real Arkiv query and prints each step it actually took, then the results. */
+/** Runs a real Arkiv query and records each step it actually took, then the results. */
 function useQuery() {
   const [lines, setLines] = useState<Line[]>([]);
   const [rows, setRows] = useState<FoundIdentity[]>();
@@ -307,129 +407,153 @@ function useQuery() {
 
 function Terminal({ lines, busy }: { lines: Line[]; busy: boolean }) {
   return (
-    <pre className="term" aria-live="polite">
-      {lines.map((l, i) => (
-        <div key={i} className={`tl ${l.kind}`} style={{ animationDelay: `${i * 70}ms` }}>
-          <span className="tl-p">{l.kind === "cmd" ? ">" : l.kind === "err" ? "!" : "<"}</span> {l.text}
-        </div>
-      ))}
-      {busy && (
-        <div className="tl out">
-          <span className="tl-p">&lt;</span> <span className="caret">█</span>
-        </div>
-      )}
-    </pre>
+    <details className="how" open>
+      <summary>How this was checked · live on Arkiv</summary>
+      <pre className="term" aria-live="polite">
+        {lines.map((l, i) => (
+          <div key={i} className={`tl ${l.kind}`} style={{ animationDelay: `${i * 60}ms` }}>
+            <span className="tl-p">{l.kind === "cmd" ? "›" : l.kind === "err" ? "!" : " "}</span> {l.text}
+          </div>
+        ))}
+        {busy && <div className="tl out">querying…</div>}
+      </pre>
+    </details>
   );
 }
 
-function QueryBox({ initial = "", autoRun = false, big = false }: { initial?: string; autoRun?: boolean; big?: boolean }) {
-  const [q, setQ] = useState(initial);
+function QueryBox({ initial = "", autoRun = false }: { initial?: string; autoRun?: boolean; big?: boolean }) {
   const { lines, rows, busy, run } = useQuery();
   useEffect(() => {
     if (autoRun) void run(initial);
   }, []);
   return (
-    <div className={`query ${big ? "big" : ""}`}>
-      <form
-        className="prompt"
-        onSubmit={(e) => {
-          e.preventDefault();
+    <div className="query">
+      <SearchPill
+        big
+        initial={initial}
+        onSearch={(q) => {
           void run(q);
           history.replaceState(null, "", `#/lookup?q=${encodeURIComponent(q)}`);
         }}
-      >
-        <span className="prompt-sym">$</span>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name · wallet 0x… · document sha-256" spellCheck={false} />
-        <button disabled={busy}>RUN ↵</button>
-      </form>
-      {lines.length > 0 && <Terminal lines={lines} busy={busy} />}
+      />
       {rows && rows.length > 0 && (
         <div className="results">
           {rows.map((f) => (
-            <a key={f.key} className="result-link" href={`#/u/${f.signed.record.holder}`}>
+            <div key={f.key} className="result-link" role="link" tabIndex={0} onClick={() => go(`/u/${f.signed.record.holder}`)} onKeyDown={(e) => e.key === "Enter" && go(`/u/${f.signed.record.holder}`)}>
               <IdentityCard found={{ signed: f.signed, ok: f.check.ok, reason: f.check.ok ? undefined : f.check.reason, key: f.key }} compact />
-            </a>
+            </div>
           ))}
         </div>
       )}
+      {rows && rows.length === 0 && !busy && <div className="card empty">No verified record matches. Names must match exactly (any case).</div>}
+      {lines.length > 0 && <Terminal lines={lines} busy={busy} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------- home */
 
+function RecentList() {
+  const [rows, setRows] = useState<FoundIdentity[]>();
+  useEffect(() => {
+    findIdentities({ recent: true }, ARKIV_KEY, 5)
+      .then(setRows)
+      .catch(() => setRows([]));
+  }, []);
+  if (!rows) return <p className="muted">Reading Arkiv…</p>;
+  if (!rows.length) return <p className="muted">No one has published yet.</p>;
+  return (
+    <ul className="recent">
+      {rows.map((f) => (
+        <li key={f.key}>
+          <a href={`#/u/${f.signed.record.holder}`}>
+            <span className="avatar sm">{f.signed.record.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span>
+            <span className="recent-name">{f.signed.record.name}</span>
+            <span className={`badge ${f.check.ok ? "ok" : "bad"}`}>{f.check.ok ? "✓ Verified" : "✕"}</span>
+            <span className="mono muted">{short(f.signed.record.holder)}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Home() {
   return (
     <>
       <section className="hero">
-        <div className="hero-left">
-          <p className="tag">
-            <span className="tag-dot" /> TRUST INFRASTRUCTURE · ON ARKIV
-          </p>
+        <div className="hero-in">
           <h1>
-            Verify the
+            Is this person real?
             <br />
-            <span className="hl">person</span>.
-            <br />
-            Verify the
-            <br />
-            <span className="hl">site</span>.
+            <span className="slash">/</span>Check before you trust.
           </h1>
-          <p className="lede">
-            Aletheia binds a name and a document fingerprint to a wallet, signed by an issuer and stored on Arkiv, so anyone can query
-            it. The Satya extension scores websites, and names verified wallets wherever they appear.
+          <SearchPill big />
+          <p className="hero-sub">
+            Try{" "}
+            <a href="#/lookup?q=Asha%20Verma">Asha Verma</a> · or <a href="#/verify">get verified</a> with a mock DigiLocker in under a minute
           </p>
-          <div className="cta">
-            <a className="btn" href="#/verify">
-              GET VERIFIED →
-            </a>
-            <a className="btn line" href="#/document">
-              CHECK A DOCUMENT
-            </a>
-          </div>
         </div>
-        <div className="hero-right">
-          <div className="console">
-            <div className="console-bar">
-              <span>QUERY CONSOLE</span>
-              <span className="dim">satya_identity_v1</span>
+      </section>
+
+      <section className="band">
+        <div className="band-in">
+          <div className="steps">
+            <div className="card step">
+              <span className="step-n">1</span>
+              <h3>Get verified</h3>
+              <p>Sign in with mock DigiLocker and upload a document. The issuer signs your name and the document's fingerprint, bound to your wallet.</p>
+              <a className="btn" href="#/verify">
+                Get verified
+              </a>
             </div>
-            <QueryBox autoRun />
+            <div className="card step">
+              <span className="step-n">2</span>
+              <h3>Stored on Arkiv</h3>
+              <p>One record per person, owned by their own wallet. Searchable by name, wallet or document. No server, no indexer.</p>
+              <a className="btn ghost" href="#/lookup">
+                Browse records
+              </a>
+            </div>
+            <div className="card step">
+              <span className="step-n">3</span>
+              <h3>Checked anywhere</h3>
+              <p>Every result's signature, owner and expiry is re-checked in the browser. The Satya extension names verified wallets on any page.</p>
+              <a className="btn ghost" href="#/document">
+                Check a document
+              </a>
+            </div>
           </div>
-        </div>
-      </section>
 
-      <section className="spec">
-        <div className="spec-cell">
-          <span className="spec-n">01</span>
-          <h3>Verify</h3>
-          <p>Mock DigiLocker signs name, document type, SHA-256 of the file you showed it, and the facts it confirms. EIP-712, bound to your wallet.</p>
-        </div>
-        <div className="spec-cell">
-          <span className="spec-n">02</span>
-          <h3>Store</h3>
-          <p>One Arkiv entity per person, owned by their wallet, indexed by name, wallet and fingerprint. Expires with the ID.</p>
-        </div>
-        <div className="spec-cell">
-          <span className="spec-n">03</span>
-          <h3>Query</h3>
-          <p>Anyone queries Arkiv directly. No indexer, no server. Every result's owner and signature is re-checked in the browser.</p>
-        </div>
-        <div className="spec-cell">
-          <span className="spec-n">04</span>
-          <h3>Recognise</h3>
-          <p>The Satya extension finds wallets on any page and shows who's verified, next to the site's own 0–100 trust score.</p>
-        </div>
-      </section>
-
-      <section className="ledger">
-        <div>
-          <span className="ledger-k">PUBLIC ON ARKIV</span>
-          <p>name · wallet · document type · document SHA-256 · facts · issuer signature</p>
-        </div>
-        <div>
-          <span className="ledger-k off">NEVER STORED</span>
-          <p>the document · date of birth · ID number · address · photo</p>
+          <div className="split2">
+            <div className="card">
+              <h3>Recently verified</h3>
+              <RecentList />
+            </div>
+            <div className="card">
+              <h3>What's public, what's not</h3>
+              <div className="pp">
+                <div>
+                  <div className="hl-head pos">On Arkiv</div>
+                  <ul>
+                    <li className="pos">Name and wallet</li>
+                    <li className="pos">Document type and SHA-256 fingerprint</li>
+                    <li className="pos">Facts: 18+, nationality, ID valid</li>
+                    <li className="pos">The issuer's signature</li>
+                  </ul>
+                </div>
+                <div>
+                  <div className="hl-head neg">Never stored</div>
+                  <ul>
+                    <li className="neg">The document itself</li>
+                    <li className="neg">Date of birth</li>
+                    <li className="neg">ID number or address</li>
+                    <li className="neg">Photo</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </>
@@ -453,7 +577,7 @@ function Verify({ session }: { session: Session | null }) {
   };
   return (
     <section className="panel narrow">
-      <p className="kicker">[01] VERIFY</p>
+      <p className="kicker">Get verified</p>
       <h2>Sign in with DigiLocker (mock)</h2>
       <p className="dim">
         You'll pick a fictional resident, upload a document, and approve what's shared. The issuer signs your name, the document's
@@ -728,9 +852,9 @@ function Results({ rows }: { rows?: FoundIdentity[] }) {
   return (
     <div className="results">
       {rows.map((f) => (
-        <a key={f.key} className="result-link" href={`#/u/${f.signed.record.holder}`}>
+        <div key={f.key} className="result-link" role="link" tabIndex={0} onClick={() => go(`/u/${f.signed.record.holder}`)} onKeyDown={(e) => e.key === "Enter" && go(`/u/${f.signed.record.holder}`)}>
           <IdentityCard found={{ signed: f.signed, ok: f.check.ok, reason: f.check.ok ? undefined : f.check.reason, key: f.key }} compact />
-        </a>
+        </div>
       ))}
     </div>
   );
@@ -739,7 +863,7 @@ function Results({ rows }: { rows?: FoundIdentity[] }) {
 function Lookup({ params }: { params: URLSearchParams }) {
   return (
     <section className="panel">
-      <p className="kicker">[02] QUERY</p>
+      <p className="kicker">Look up</p>
       <h2>Who's verified?</h2>
       <p className="dim small">Full name (exact, any case), wallet address, or a document's SHA-256. Straight from Arkiv; every result re-checked here.</p>
       <QueryBox initial={params.get("q") ?? ""} autoRun big />
@@ -772,7 +896,7 @@ function DocumentCheck() {
   }, [file]);
   return (
     <section className="panel">
-      <p className="kicker">[03] DOCUMENT</p>
+      <p className="kicker">Check a document</p>
       <h2>Was this exact file verified?</h2>
       <div
         className={`drop ${drag ? "over" : ""}`}
@@ -820,10 +944,22 @@ function Profile({ address }: { address: string }) {
   }, [address]);
   return (
     <section className="panel">
-      <p className="kicker">PROFILE</p>
+      <p className="kicker">Verification report</p>
       {/* The wallet is written out in full so the Satya extension can recognise it on this page. */}
       <h2 className="mono wallet-h">{address}</h2>
-      {error ? <p className="err">{error}</p> : <Results rows={rows} />}
+      {error ? (
+        <p className="err">{error}</p>
+      ) : !rows ? (
+        <p className="muted">Reading Arkiv…</p>
+      ) : !rows.length ? (
+        <p className="muted">No verified record for this wallet.</p>
+      ) : (
+        <div className="report">
+          {rows.map((f) => (
+            <IdentityCard key={f.key} found={{ signed: f.signed, ok: f.check.ok, reason: f.check.ok ? undefined : f.check.reason, key: f.key }} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -855,5 +991,9 @@ export function App() {
       />
     );
   else page = <Home />;
-  return <Shell session={session}>{page}</Shell>;
+  return (
+    <Shell session={session} dark={page !== null && route.path === "/"}>
+      <div className={route.path === "/" ? "" : "page"}>{page}</div>
+    </Shell>
+  );
 }

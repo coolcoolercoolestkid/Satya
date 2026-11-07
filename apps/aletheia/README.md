@@ -55,13 +55,12 @@ browser (`sessionStorage`) instead of a server call.
 
 ## Design
 
-An instrument panel rather than a landing page, shared with the extension: near-black, a
-hairline grid, monospace data labels, one signal colour (acid lime), sharp corners. Every
-"hi-tech" element shows real data:
-
-- the nav reads Arkiv's **live block height** every few seconds;
-- the **query console** prints the actual query it sends to Arkiv and each check it then runs
-  on the result (owner = holder, EIP-712 signer, expiry);
-- each identity pass carries a **barcode drawn from the document's SHA-256**.
+A consumer trust-check site, after ScamAdviser's layout (not its brand): a floating white
+nav card with a search pill, a dark hero with one big search, and results on white cards.
+Each person's report has a gauge of the checks that passed (owner, issuer signature, expiry),
+green **positive highlights**, a red **watch out for** list (always including that the issuer
+is a demo with fictional residents), document details and a barcode drawn from the document's
+SHA-256. The "How this was checked" box prints the real Arkiv query and each check it ran, and
+the nav shows Arkiv's live block height.
 
 The mock DigiLocker deliberately looks different (plain, light) so it reads as a separate service.
