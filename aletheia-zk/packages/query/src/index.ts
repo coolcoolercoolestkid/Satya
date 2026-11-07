@@ -77,3 +77,13 @@ export {
   RECENT_VERIFICATIONS_QUERY,
   VERIFICATION_QUERY,
 } from "./queries.ts";
+
+// Arkiv read path (ETHGlobal Mumbai 2026): replaces the subgraph. Same QueryClient interface.
+export {
+  AletheiaEvent,
+  AletheiaMirrorMeta,
+  ARKIV_MIRROR_PUBLISHER,
+  createArkivQueryClient,
+  SEPOLIA_CHAIN_ID,
+  type ArkivQueryClientOptions,
+} from "./arkiv.ts";

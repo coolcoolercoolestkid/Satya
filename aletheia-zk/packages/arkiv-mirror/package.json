@@ -1,0 +1,14 @@
+{
+  "name": "@aletheia/arkiv-mirror",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mirrors the Aletheia contracts' Sepolia events into Arkiv. Replaces the subgraph (ETHGlobal Mumbai 2026).",
+  "scripts": {
+    "mirror": "node --experimental-strip-types --no-warnings src/mirror.ts"
+  },
+  "dependencies": {
+    "@arkiv-network/sdk": "1.0.1",
+    "viem": "^2.21.0"
+  }
+}

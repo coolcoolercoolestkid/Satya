@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Typed GraphQL read client for the Aletheia subgraph. Every read carries the indexer's block and error state, so indexing lag is answerable rather than invisible.",
+  "description": "Typed read client for Aletheia's on-chain records. Reads the Arkiv mirror of the contracts' events (replacing the original GraphQL subgraph client); every read carries how far the mirror has synced, so lag is answerable rather than invisible.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -29,5 +29,9 @@
   "devDependencies": {
     "@types/node": "^22.19.0",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@arkiv-network/sdk": "1.0.1",
+    "viem": "^2.21.0"
   }
 }

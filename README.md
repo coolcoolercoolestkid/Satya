@@ -21,7 +21,7 @@ It is **private by default**: until you choose otherwise, the only thing that le
 is a two-character bucket id. On first open Satya asks once whether to run full checks
 automatically, and says exactly which services would see the site's name (see [CROPS](#crops-a-checker-that-learns-nothing-about-your-browsing)).
 
-Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE.md).
+Built at **ETHGlobal Mumbai 2026**, except [`aletheia-zk/`](aletheia-zk/IMPORTED.md): see [Prior work](#prior-work). Design notes: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Status
 
@@ -39,7 +39,27 @@ Built at **ETHGlobal Mumbai 2026**. Design notes: [ARCHITECTURE.md](ARCHITECTURE
 | **Aletheia, the people side of the Satya network** ([apps/aletheia](apps/aletheia/README.md)): sign in with a mock DigiLocker, upload a document (fingerprinted in the browser, never uploaded), and the issuer signs your **name + document fingerprint + facts** (18+, nationality, ID valid) to your wallet. Published to Arkiv as `satya_identity_v1` and **queryable by name, wallet or document fingerprint** (Arkiv queries, no indexer). The Satya extension recognises verified wallets on any page by name | ✅ sign-in, signed record and 18+ gate tested in a browser; one record published to Arkiv and found again by name, wallet and fingerprint, on the site and by the extension; publishing from the site with MetaMask not yet tried |
 | MCP server: lets AI agents check links, messages and wallets before acting ([apps/mcp](apps/mcp/README.md)) | ✅ |
 | **Chainlink CRE workflow** ([cre/](cre/README.md)): every DON node independently looks up a domain's registration date, first certificate, archive history and DNS; the DON agrees on each (median) and scores them | ✅ runs in the CRE simulator with live lookups: uniswap.org 80, two live phishing domains 25 and 40 ([results](cre/README.md#status)); not deployed (needs Chainlink deploy access) |
+| **Aletheia ZK** ([aletheia-zk/](aletheia-zk/IMPORTED.md)), **prior work, imported**: zero-knowledge age / nationality / not-expired claims from a passport MRZ, verified by Sepolia contracts. **New here: The Graph replaced by Arkiv**: a mirror copies every contract event from Sepolia into Arkiv, and the site's verify page reads Arkiv instead of a subgraph | ✅ all 27 on-chain events mirrored (24 claims, 3 issuer events) and read back by the site's verify page (24 records for the deployer wallet, correct STALE/VERIFIED states); holder proving flow is unchanged prior work, not re-tested here |
 | zkTLS proven scam reports (TLSNotary + Arkiv) | 📝 [design only](docs/zktls.md) |
+
+## Prior work
+
+`aletheia-zk/` is **Aletheia**, a zero-knowledge credential protocol the same author built
+**before** this hackathon (8–12 Sep 2026, [Ishitalisa/Aletheia](https://github.com/Ishitalisa/Aletheia/tree/feature/project-foundation)).
+It was imported unchanged in one commit (`Import Aletheia as prior work…`) so it can be compared
+byte for byte. **Only the commits after it are hackathon work:** The Graph is replaced by Arkiv.
+
+- [`aletheia-zk/packages/arkiv-mirror`](aletheia-zk/packages/arkiv-mirror/src/mirror.ts) reads every
+  event the Aletheia contracts emitted on Sepolia (claims verified, issuers registered or
+  revoked, profiles) and writes each one to Arkiv once (`aletheia_event_v1`), plus how far it
+  has synced (`aletheia_mirror_meta_v1`). Re-runs skip what's already there; a GitHub Action
+  runs it hourly.
+- [`aletheia-zk/packages/query/src/arkiv.ts`](aletheia-zk/packages/query/src/arkiv.ts) rebuilds the
+  same verification / issuer / profile records the subgraph built, from those events, behind the
+  same interface, so the verify page and its five states are unchanged.
+
+Everything else in `aletheia-zk/` (circuits, contracts, passport reader, holder flow) is the
+September work.
 
 ## How the score works
 
@@ -208,6 +228,7 @@ pnpm build
   little test GLM from the [Arkiv faucet](https://hub.arkiv.network/faucet).
 - **Aletheia** (verify people, look them up, check a document): `pnpm aletheia`, then
   open http://localhost:5175. See [apps/aletheia](apps/aletheia/README.md).
+- **Aletheia ZK** (prior work; verify page reads Arkiv): `cd aletheia-zk && pnpm install && pnpm --filter "@aletheia/web^..." run build`, then `pnpm --filter @aletheia/web dev`. Mirror new Sepolia events: `pnpm --filter @aletheia/arkiv-mirror mirror`.
 - **Demo scam pages** (local only, clearly labelled, forms send nothing): `pnpm demo`, then
   open http://localhost:5180.
 - **Republish the registry** (needs a funded key in `packages/registry/.env`):

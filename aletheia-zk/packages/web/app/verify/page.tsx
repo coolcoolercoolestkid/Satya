@@ -251,7 +251,7 @@ export default function VerifyPage() {
       <h1>Verifier flow</h1>
       <p className="sub">
         Look up an ENS name or a wallet address, read what it has proven, and see each record as one
-        of five honest states. Everything is read live from the subgraph and mainnet ENS on this
+        of five honest states. Everything is read live from Arkiv (a mirror of the contracts' Sepolia events) and mainnet ENS on this
         device. A verifier learns only the answer to the claim — never the holder’s document or the
         data behind it.
       </p>
@@ -351,11 +351,11 @@ export default function VerifyPage() {
             </span>
             <span className="k">reached via</span>
             <span>{result.target.via === "ens" ? "ENS forward resolution" : "typed address"}</span>
-            <span className="k">indexer block</span>
+            <span className="k">Arkiv mirror synced to block</span>
             <span>
               {String(result.meta.blockNumber)}
               {result.meta.hasIndexingErrors && (
-                <span className="error"> — subgraph reports indexing errors</span>
+                <span className="error"> — the mirror reports errors</span>
               )}
             </span>
           </div>
@@ -391,7 +391,7 @@ export default function VerifyPage() {
         </h2>
         <p className="hint">
           Paste a verificationId and the block its transaction was mined in (the holder flow links
-          here with both filled in). While the subgraph is still behind that block, the state is{" "}
+          here with both filled in). While the Arkiv mirror is still behind that block, the state is{" "}
           <b>pending</b>; the poll flips it to <span className="ok">verified</span> the moment the
           record is indexed — no reload. A submitted transaction is never shown as verified before
           its record exists.

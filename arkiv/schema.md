@@ -1,6 +1,6 @@
 # Satya's Arkiv records
 
-Satya stores five kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
+Satya stores six kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
 RPC `https://rpc.rabdi.db-chain.testnet.arkiv.network`, explorer
 `https://rabdi.explorer.arkiv.network`). All are written through `defineSchema` from
 `@arkiv-network/sdk`, so every entity carries the attribute `arkiv.schema` with the schema's
@@ -170,3 +170,27 @@ and the payload's signature recovers to a trusted issuer. Both are checked in th
 **Live record:** fictional resident Asha Verma, bound to the publisher wallet
 `0x0D341d00bB9c2327033f447b45Ebb8712521E736`, published with
 `packages/registry/scripts/publish-identity.ts` (the same issue/publish code the site uses).
+
+## 6. `aletheia_event_v1` + `aletheia_mirror_meta_v1`: Aletheia's Sepolia events, mirrored
+
+Written by the Aletheia mirror ([aletheia-zk/packages/arkiv-mirror](../aletheia-zk/packages/arkiv-mirror/src/mirror.ts)),
+which replaces Aletheia's subgraph. One entity per log the Aletheia contracts emitted on Sepolia,
+owned by the publisher wallet, at Arkiv's maximum lifetime.
+
+| Attribute | Type | Indexed | What |
+|---|---|---|---|
+| `chainId` | u64 | ✓ | 11155111 (Sepolia) |
+| `contract` | addr | ✓ | The emitting contract (each AletheiaVerifier deployment, the issuer registry, the profile contract) |
+| `event` | str | ✓ | `ClaimVerified`, `IssuerRegistered`, `IssuerActiveSet` or `ProfileRegistered` |
+| `eventKey` | str | ✓ | The event's main id: verificationId, issuerId or account |
+| `subject` | addr | ✓ | The wallet a claim or profile is about (when there is one) |
+| `blockNumber` | u64 | ✓ | Sepolia block |
+| `logIndex` | u64 | | Position in the block (with `txHash`, makes each log unique) |
+| `txHash` | str | ✓ | Sepolia transaction, so every record can be checked on-chain |
+| payload | bytes | | The decoded event arguments (JSON) |
+
+`aletheia_mirror_meta_v1` (`chainId`, `syncedBlock`) records the last Sepolia block fully copied;
+readers treat it like a subgraph's `_meta.block`, so a claim mined after it reads as *pending*.
+
+**State on 7 Nov 2026:** 27 events mirrored (24 `ClaimVerified` across three verifier deployments,
+1 `IssuerRegistered`, 2 `IssuerActiveSet`), synced to Sepolia block 12,080,180.

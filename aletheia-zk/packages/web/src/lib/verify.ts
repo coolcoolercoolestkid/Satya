@@ -8,9 +8,10 @@
  *   - ENS resolution (`@aletheia/ens/browser`) over the mainnet RPC, so a verifier can
  *     type a name or an address. The name is resolved live and never stored — the wallet
  *     address is the only anchor a proof binds to (docs/architecture.md, ENS section).
- *   - the subgraph read client (`@aletheia/query/browser`) over the Studio endpoint, which
- *     carries the indexer's block and error state on every read so indexing lag is an
- *     explicit `pending` state, not a silent wrong answer.
+ *   - the Arkiv read client (`@aletheia/query/browser`), which reads the Arkiv mirror of the
+ *     contracts' Sepolia events and carries the mirror's synced block on every read, so lag is
+ *     an explicit `pending` state, not a silent wrong answer. (ETHGlobal Mumbai 2026: this
+ *     replaced the original subgraph read client over The Graph Studio.)
  *
  * The classification itself is `deriveVerificationState`, the same pure function the query
  * package unit-tests and reproduces against the real endpoint (`scripts/states.ts`). This
@@ -24,12 +25,13 @@ import { isAddress } from "viem";
 
 import { createEnsResolver, type EnsResolver } from "@aletheia/ens/browser";
 import {
-  createQueryClient,
+  createArkivQueryClient,
   type FreshnessPolicy,
   type QueryClient,
 } from "@aletheia/query/browser";
 
-const GRAPH_QUERY_URL = process.env.NEXT_PUBLIC_GRAPH_QUERY_URL;
+/** Arkiv RPC access key (optional; empty uses Arkiv's public, rate-limited endpoint). */
+const ARKIV_ACCESS_KEY = process.env.NEXT_PUBLIC_ARKIV_ACCESS_KEY ?? "";
 const MAINNET_RPC_URL = process.env.NEXT_PUBLIC_MAINNET_RPC_URL;
 
 /** Whether ENS-name resolution is configured. Address lookup works without it. */
@@ -38,17 +40,9 @@ export const ensAvailable = Boolean(MAINNET_RPC_URL);
 let queryClient: QueryClient | null = null;
 let ensResolver: EnsResolver | null = null;
 
-/** The subgraph read client, built once. Throws a readable error if unconfigured. */
+/** The Arkiv read client, built once. Needs no endpoint configuration. */
 export function getQueryClient(): QueryClient {
-  if (queryClient === null) {
-    if (!GRAPH_QUERY_URL) {
-      throw new Error(
-        "NEXT_PUBLIC_GRAPH_QUERY_URL is not set. Add it to packages/web/.env.local " +
-          "(the subgraph query endpoint, same as the root .env GRAPH_QUERY_URL).",
-      );
-    }
-    queryClient = createQueryClient({ endpoint: GRAPH_QUERY_URL });
-  }
+  if (queryClient === null) queryClient = createArkivQueryClient({ accessKey: ARKIV_ACCESS_KEY });
   return queryClient;
 }
 

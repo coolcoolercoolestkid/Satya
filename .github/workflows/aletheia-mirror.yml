@@ -1,0 +1,31 @@
+# Keeps the Arkiv mirror of the Aletheia contracts current (it replaces Aletheia's subgraph).
+# Every hour it copies any new Sepolia events into Arkiv; already-mirrored logs are skipped.
+# Needs the repository secret SATYA_PUBLISHER_KEY and, optionally, ARKIV_ACCESS_KEY.
+name: Aletheia Arkiv mirror
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: aletheia-zk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --filter @aletheia/arkiv-mirror...
+      - name: Mirror new Sepolia events to Arkiv
+        env:
+          SATYA_PUBLISHER_KEY: ${{ secrets.SATYA_PUBLISHER_KEY }}
+          ARKIV_ACCESS_KEY: ${{ secrets.ARKIV_ACCESS_KEY }}
+        run: pnpm --filter @aletheia/arkiv-mirror mirror

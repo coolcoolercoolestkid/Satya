@@ -8,6 +8,15 @@ importers:
 
   .: {}
 
+  packages/arkiv-mirror:
+    dependencies:
+      '@arkiv-network/sdk':
+        specifier: 1.0.1
+        version: 1.0.1(typescript@5.9.3)(viem@2.56.3(typescript@5.9.3)(zod@3.25.76))
+      viem:
+        specifier: ^2.21.0
+        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
+
   packages/circuits:
     dependencies:
       '@aletheia/credential':
@@ -134,6 +143,13 @@ importers:
         version: 5.9.3
 
   packages/query:
+    dependencies:
+      '@arkiv-network/sdk':
+        specifier: 1.0.1
+        version: 1.0.1(typescript@5.9.3)(viem@2.56.3(typescript@5.9.3)(zod@3.25.76))
+      viem:
+        specifier: ^2.21.0
+        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: ^22.19.0
@@ -253,6 +269,16 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@arkiv-network/sdk@1.0.1':
+    resolution: {integrity: sha512-DCOFdGunn4I5nYrvIV/YIkMCkLZM7EQNSyNPtqpmQkP2JzTEfRLBJleBSB2rokWMa833/9P8DMiwsEXACr3CUQ==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      typescript: '>=5.0.0'
+      viem: ^2.0.0
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -3408,6 +3434,12 @@ snapshots:
   '@actions/io@3.0.2': {}
 
   '@adraffy/ens-normalize@1.11.1': {}
+
+  '@arkiv-network/sdk@1.0.1(typescript@5.9.3)(viem@2.56.3(typescript@5.9.3)(zod@3.25.76))':
+    dependencies:
+      viem: 2.56.3(typescript@5.9.3)(zod@3.25.76)
+    optionalDependencies:
+      typescript: 5.9.3
 
   '@babel/code-frame@7.29.7':
     dependencies:

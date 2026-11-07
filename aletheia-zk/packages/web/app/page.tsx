@@ -749,7 +749,7 @@ export default function Page() {
               See this in the verifier view →
             </Link>{" "}
             <span className="hint">
-              (it starts as pending and turns verified once the subgraph indexes the block, without a
+              (it starts as pending and turns verified once the Arkiv mirror copies the block, without a
               reload)
             </span>
           </p>
