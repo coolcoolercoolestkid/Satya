@@ -317,6 +317,7 @@ export async function matchInRecords(
   return hits;
 }
 export * from "./check.js";
+export * from "./siteFacts.js";
 
 // ---------- OFAC sanctioned addresses, one record each (queryable) ----------
 

@@ -1,4 +1,5 @@
 import { normalizeHost } from "./domain.js";
+import { fetchRecorded } from "./recorded.js";
 import type { Finding } from "./types.js";
 
 /**
@@ -91,12 +92,11 @@ export async function lookupCertificates(url: string, fetchImpl: typeof fetch = 
     return [];
   }
   try {
-    const res = await fetchImpl(
-      `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(host)}&expand=issuer`,
-    );
+    const res = await fetchRecorded(fetchImpl, `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(host)}&expand=issuer`);
     if (!res.ok) return []; // rate-limited or down: say nothing rather than guess
-    const link = `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(host)}&expand=issuer`;
-    return certificateFindings(host, (await res.json()) as Issuance[]).map((f) => ({ ...f, link }));
+    // crt.sh shows the same Certificate Transparency logs as a readable page.
+    const link = `https://crt.sh/?q=${encodeURIComponent(host)}`;
+    return certificateFindings(host, JSON.parse(res.body) as Issuance[]).map((f) => ({ ...f, link, proof: res.proof }));
   } catch {
     return [];
   }

@@ -1,6 +1,6 @@
 # Satya's Arkiv records
 
-Satya stores six kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
+Satya stores seven kinds of records on **Arkiv Rabdi testnet** (chain ID 7794095,
 RPC `https://rpc.rabdi.db-chain.testnet.arkiv.network`, explorer
 `https://rabdi.explorer.arkiv.network`). All are written through `defineSchema` from
 `@arkiv-network/sdk`, so every entity carries the attribute `arkiv.schema` with the schema's
@@ -194,3 +194,24 @@ readers treat it like a subgraph's `_meta.block`, so a claim mined after it read
 
 **State on 7 Nov 2026:** 27 events mirrored (24 `ClaimVerified` across three verifier deployments,
 1 `IssuerRegistered`, 2 `IssuerActiveSet`), synced to Sepolia block 12,080,180.
+
+## 7. `satya_site_facts_v1`: recorded site facts, with the response hashes
+
+Written by [`packages/registry/scripts/publish-site-facts.ts`](../packages/registry/scripts/publish-site-facts.ts)
+using the extension's own lookups. One entity per domain and run, owned by the publisher,
+kept 30 days. The extension's full check looks it up (by SHA-256 of the domain) and shows
+"✓ matches Arkiv record ↗" or "≠ Arkiv record ↗" next to the live answer.
+
+| Attribute | Type | Indexed | What |
+|---|---|---|---|
+| `domainHash` | str | ✓ | SHA-256 of the registrable domain |
+| `domain` | str | | The domain |
+| `registered` | str | | Registration date from RDAP (YYYY-MM-DD) |
+| `rdapUrl`, `rdapSha256` | str | | The registry RDAP URL asked, and SHA-256 of its raw response |
+| `firstArchived` | str | | First Internet Archive capture (YYYY-MM-DD), or empty |
+| `archiveUrl`, `archiveSha256` | str | | Link to that capture, and SHA-256 of the archive API's raw response |
+| `fetchedAt` | u64 | ✓ | When the sources were fetched (Unix seconds) |
+
+Recorded on 7 Nov 2026 for uniswap.org, ens.domains, metamask.io, github.com, onlinesbi.sbi,
+example.com and chromeboard.com. RDAP responses include the registry's own timestamp, so their
+hash changes on every request even when the date doesn't; the panel compares the dates.

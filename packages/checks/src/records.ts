@@ -1,4 +1,5 @@
 import { registrableDomain } from "./domain.js";
+import { fetchRecorded } from "./recorded.js";
 import type { Finding } from "./types.js";
 
 /** Minimal shape of an RDAP domain response (RFC 9083). */
@@ -87,12 +88,12 @@ export async function lookupDomainAge(
     // Longest matching suffix first ("co.in" before "in").
     const base = labels.map((_, i) => servers.get(labels.slice(i).join("."))).find(Boolean);
     const url = base ? `${base}domain/${encodeURIComponent(domain)}` : `https://rdap.org/domain/${encodeURIComponent(domain)}`;
-    const res = await fetchImpl(url, { headers: { accept: "application/rdap+json" } });
+    const res = await fetchRecorded(fetchImpl, url, { headers: { accept: "application/rdap+json" } });
     if (!res.ok) return undefined;
-    const date = registrationDateFromRdap((await res.json()) as RdapResponse);
+    const date = registrationDateFromRdap(JSON.parse(res.body) as RdapResponse);
     if (!date) return undefined;
-    // The exact registry record this came from, so anyone can check it.
-    return { ...domainAgeFinding(domain, date), source: `RDAP · ${new URL(url).host}`, link: url };
+    // The exact registry record this came from, so anyone can check it, plus a hash of what we saw.
+    return { ...domainAgeFinding(domain, date), source: `RDAP · ${new URL(url).host}`, link: url, proof: res.proof };
   } catch {
     return undefined;
   }
@@ -173,14 +174,14 @@ export function archiveFinding(domain: string, firstSeen: Date | undefined, now 
 export async function lookupArchiveHistory(host: string, fetchImpl: typeof fetch = fetch): Promise<Finding | undefined> {
   const domain = registrableDomain(host);
   try {
-    const res = await fetchImpl(`https://archive.org/wayback/available?url=${encodeURIComponent(domain)}&timestamp=19900101`);
+    const res = await fetchRecorded(fetchImpl, `https://archive.org/wayback/available?url=${encodeURIComponent(domain)}&timestamp=19900101`);
     if (!res.ok) return undefined;
-    const body = (await res.json()) as { archived_snapshots?: { closest?: { timestamp?: string; available?: boolean } } };
+    const body = JSON.parse(res.body) as { archived_snapshots?: { closest?: { timestamp?: string; available?: boolean } } };
     const ts = body.archived_snapshots?.closest?.timestamp;
     const first = ts ? new Date(`${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T00:00:00Z`) : undefined;
     const f = archiveFinding(domain, first && !Number.isNaN(first.getTime()) ? first : undefined);
     // Link to the first capture itself, or to the archive's calendar when there is none.
-    return { ...f, link: ts ? `https://web.archive.org/web/${ts}/${domain}` : `https://web.archive.org/web/*/${domain}` };
+    return { ...f, link: ts ? `https://web.archive.org/web/${ts}/${domain}` : `https://web.archive.org/web/*/${domain}`, proof: res.proof };
   } catch {
     return undefined;
   }

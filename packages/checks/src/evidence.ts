@@ -24,6 +24,8 @@ export interface EvidenceHeader {
   score: number;
   label: string;
   findings: string[];
+  /** Each outside source consulted: what fact, its URL, SHA-256 of the response as received, and when. Covered by the fingerprint. */
+  sources?: { fact: string; url: string; sha256: string; fetchedAt: string }[];
 }
 
 export interface EvidenceFile {
@@ -70,6 +72,7 @@ export async function buildEvidence(input: {
   score: number;
   label: string;
   findings: string[];
+  sources?: { fact: string; url: string; sha256: string; fetchedAt: string }[];
   capturedAt?: Date;
 }): Promise<EvidenceFile> {
   const header: EvidenceHeader = {
@@ -82,6 +85,7 @@ export async function buildEvidence(input: {
     score: input.score,
     label: input.label,
     findings: input.findings,
+    ...(input.sources?.length ? { sources: input.sources } : {}),
   };
   return { header, fingerprint: await evidenceFingerprint(header), text: input.text, screenshot: input.screenshot };
 }

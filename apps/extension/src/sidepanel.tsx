@@ -1,6 +1,14 @@
 import { aiFindings, analyzePage, buildEvidence, credentialFindings, metadataFindings, scoreFindings, type CredibilityResult, type Finding } from "@satya/checks";
-import { checkRegistry, lookupVerifiedContracts, SOURCIFY_ON_ARKIV, type RegistryResult, type VerifiedContract } from "@satya/registry";
-import { freeHostOf } from "@satya/checks";
+import {
+  checkRegistry,
+  lookupSiteFacts,
+  lookupVerifiedContracts,
+  SOURCIFY_ON_ARKIV,
+  type RegistryResult,
+  type SiteFactsRecord,
+  type VerifiedContract,
+} from "@satya/registry";
+import { freeHostOf, registrableDomain } from "@satya/checks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { ImageCheck } from "./c2pa";
@@ -53,6 +61,8 @@ interface Done {
   images?: ImageCheck;
   /** Contract addresses on the page, and which of them Sourcify (on Arkiv) knows. */
   contracts?: { asked: number; verified: VerifiedContract[] };
+  /** What Satya recorded on Arkiv earlier for this domain, to compare with the live answer. */
+  siteFacts?: SiteFactsRecord;
 }
 /** On-device AI-text check: runs after the receipt shows, so a first-time model download never blocks it. */
 type AiText =
@@ -152,6 +162,9 @@ function Actions({ s, onDeep }: { s: Done; onDeep: () => void }) {
         score: s.result.score,
         label: s.result.label,
         findings: s.result.findings.filter((f) => f.severity === "danger" || f.severity === "warning").map((f) => f.title),
+        sources: s.result.findings
+          .filter((f) => f.proof)
+          .map((f) => ({ fact: f.title, url: f.proof!.url, sha256: f.proof!.sha256, fetchedAt: f.proof!.fetchedAt })),
       });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([JSON.stringify(ev, null, 1)], { type: "application/json" }));
@@ -199,6 +212,8 @@ interface Row {
   /** Where the answer came from, and a link to see the raw evidence. */
   via?: string;
   link?: string;
+  /** The Arkiv record of this fact, and whether today's answer matches it. */
+  arkiv?: { link: string; matches: boolean };
 }
 
 const LISTED = /^(Known phishing site|Listed as a |Wallet on )/;
@@ -239,25 +254,40 @@ function checklist(s: Done): Row[] {
 
   const shared = f.find((x) => /^Hosted on .+, where anyone can make a site$/.test(x.title));
   /** Rows answered by an outside service: value, plus where it came from and a link to check it. */
-  const sourced = (label: string, re: RegExp, value: (hit: Finding) => string, via: string) => {
+  const facts = s.siteFacts;
+  /**
+   * Rows answered by an outside service: value, where it came from with a link, the hash of the
+   * response as received, and (when Satya recorded it earlier) the Arkiv record to compare with.
+   */
+  const sourced = (label: string, re: RegExp, value: (hit: Finding) => string, via: string, recorded?: string) => {
     if (!s.deep) return rows.push({ label, status: "skip", value: "Full check" });
     if (s.pending) return rows.push({ label, status: "skip", value: "…" });
     const hit = pick("records", re)[0];
     if (!hit) return rows.push({ label, status: "value", value: "No answer", via });
     if (shared && hit.severity === "info" && /hosting service/.test(hit.detail ?? "")) return rows.push({ label, status: "value", value: "Host's, not this site's", via });
+    const v = value(hit);
+    const lines = [hit.detail];
+    if (hit.proof) lines.push(`Response SHA-256 ${hit.proof.sha256}, fetched ${hit.proof.fetchedAt.replace("T", " ").slice(0, 19)} UTC.`);
+    if (recorded !== undefined && facts)
+      lines.push(
+        recorded === v
+          ? `Matches the Arkiv record from ${facts.fetchedAt.toISOString().slice(0, 10)}.`
+          : `Arkiv record from ${facts.fetchedAt.toISOString().slice(0, 10)} says ${recorded || "none"}: the source has changed since.`,
+      );
     rows.push({
       label,
       status: hit.severity === "good" ? "pass" : hit.severity === "info" ? "value" : sev([hit]),
-      value: value(hit),
-      hint: hit.detail,
+      value: v,
+      hint: lines.filter(Boolean).join("\n"),
       via: shortVia(hit.source),
       link: hit.link,
+      arkiv: recorded !== undefined && facts ? { link: `${EXPLORER}/entity/${facts.key}`, matches: recorded === v } : undefined,
     });
   };
   const dateIn = (t?: string) => /\d{4}-\d{2}-\d{2}/.exec(t ?? "")?.[0];
-  sourced("Registered", /^Domain is/, (h) => dateIn(h.detail) ?? shortValue(h.title), "RDAP");
+  sourced("Registered", /^Domain is/, (h) => dateIn(h.detail) ?? shortValue(h.title), "RDAP", facts?.registered);
   sourced("Certificate", /certificate/i, (h) => shortValue(h.title), "Cert Spotter");
-  sourced("First archived", /^(Online since|Online for|First seen|The Internet Archive has never)/, (h) => dateIn(h.detail) ?? "Never", "Internet Archive");
+  sourced("First archived", /^(Online since|Online for|First seen|The Internet Archive has never)/, (h) => dateIn(h.detail) ?? "Never", "Internet Archive", facts ? facts.firstArchived || "Never" : undefined);
   if (s.deep && !s.pending) {
     const ens = f.find((x) => / links to this site$/.test(x.title));
     rows.push({
@@ -318,6 +348,17 @@ function Checks({ rows }: { rows: Row[] }) {
                 ) : (
                   <span className="chk-via">{r.via}</span>
                 ))}
+              {r.arkiv && (
+                <a
+                  className={`chk-via ${r.arkiv.matches ? "" : "changed"}`}
+                  href={r.arkiv.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={r.arkiv.matches ? "Same answer Satya recorded on Arkiv" : "Differs from what Satya recorded on Arkiv"}
+                >
+                  {r.arkiv.matches ? "✓ matches Arkiv record ↗" : "≠ Arkiv record ↗"}
+                </a>
+              )}
             </span>
             <span className="chk-value">{r.value}</span>
           </li>
@@ -543,7 +584,11 @@ function App() {
     void checkAiText(page.mainText || page.text, myRun);
     const addresses = [...new Set((page.text.match(/\b0x[a-fA-F0-9]{40}\b/g) ?? []).map((a) => a.toLowerCase()))].slice(0, 5);
     const noImages: ImageCheck = { creds: [], found: 0, checked: 0, errors: [], metadata: [] };
-    const [full, identity, images, siteEns, verified, ensNames, people] = await Promise.all([
+    // Facts Satya recorded earlier on Arkiv for this domain (registration, first archive, response hashes).
+    const recordedFacts = freeHostOf(host)
+      ? Promise.resolve(undefined)
+      : withTimeout(lookupSiteFacts(registrableDomain(host), __ARKIV_ACCESS_KEY__), undefined as SiteFactsRecord | undefined);
+    const [full, identity, images, siteEns, verified, ensNames, people, siteFacts] = await Promise.all([
       withTimeout(analyzePage(page, { ...localCtx, network: true, fetchImpl: timedFetch }), quick, LOOKUP_MS + 1000),
       withTimeout(
         loadIdentity().then((id) => id.checkIdentity(page, id.defaultIdentityDeps(__ARKIV_ACCESS_KEY__))),
@@ -572,6 +617,7 @@ function App() {
             [] as import("@satya/identity").FoundIdentity[],
           )
         : Promise.resolve([] as import("@satya/identity").FoundIdentity[]),
+      recordedFacts,
     ]);
     if (runId.current !== myRun) return;
     const contractFindings: Finding[] = verified.map((c) => ({
@@ -618,6 +664,7 @@ function App() {
       ensNames,
       images,
       contracts: addresses.length ? { asked: addresses.length, verified } : undefined,
+      siteFacts,
     });
     void highlight(result);
   }, []);

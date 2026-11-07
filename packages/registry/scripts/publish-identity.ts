@@ -6,7 +6,7 @@
  */
 import { createWalletClient } from "@arkiv-network/sdk";
 import { rabdi } from "@arkiv-network/sdk/chains";
-import { fingerprint, findIdentities, issueIdentity, publishIdentity } from "../../identity/src/identityRecord.ts";
+import { fingerprint, findIdentities, issueIdentity, publishIdentity } from "../../identity/src/identityRecord.js";
 import { http, isHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 

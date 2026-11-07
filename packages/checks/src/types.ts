@@ -19,6 +19,17 @@ export interface Finding {
   weight: number;
   /** Where to see the raw evidence yourself (registry record, archive snapshot, log search). */
   link?: string;
+  /** What was actually received: the request URL, SHA-256 of the raw response, and when. */
+  proof?: SourceProof;
+}
+
+/** A record of one response from an outside source, so it can be shown later even if the source changes. */
+export interface SourceProof {
+  url: string;
+  /** SHA-256 of the response body exactly as received, 0x-prefixed. */
+  sha256: string;
+  /** ISO time the response was received. */
+  fetchedAt: string;
 }
 
 /** Structural facts about the page, read by the content script (no page text). */

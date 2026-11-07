@@ -80,4 +80,5 @@ export function adjustForOrigin(findings: Finding[], page: PageSnapshot, brands:
   });
 }
 export * from "./credentials.js";
+export * from "./recorded.js";
 export * from "./evidence.js";
