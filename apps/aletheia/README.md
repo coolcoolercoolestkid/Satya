@@ -55,6 +55,13 @@ browser (`sessionStorage`) instead of a server call.
 
 ## Design
 
-Dark theme, oversized display type, a bento grid of actions, glass navigation and soft gradient
-light, after current award-gallery UI (Awwwards "UI design"). The mock DigiLocker deliberately
-looks different (plain, light) so it reads as a separate service.
+An instrument panel rather than a landing page, shared with the extension: near-black, a
+hairline grid, monospace data labels, one signal colour (acid lime), sharp corners. Every
+"hi-tech" element shows real data:
+
+- the nav reads Arkiv's **live block height** every few seconds;
+- the **query console** prints the actual query it sends to Arkiv and each check it then runs
+  on the result (owner = holder, EIP-712 signer, expiry);
+- each identity pass carries a **barcode drawn from the document's SHA-256**.
+
+The mock DigiLocker deliberately looks different (plain, light) so it reads as a separate service.

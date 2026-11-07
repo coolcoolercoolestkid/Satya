@@ -194,6 +194,8 @@ interface Row {
   label: string;
   status: Status;
   value: string;
+  /** Shown on hover: what exactly was checked. */
+  hint?: string;
 }
 
 const LISTED = /^(Known phishing site|Listed as a |Wallet on )/;
@@ -207,11 +209,14 @@ function checklist(s: Done): Row[] {
   const rows: Row[] = [];
 
   const listed = f.filter((x) => LISTED.test(x.title));
-  const lists = s.registry.lookups.length ? new Set(s.registry.lookups.flatMap((l) => l.records.map((r) => r.source))).size : 0;
+  const listNames = [...new Set(s.registry.lookups.flatMap((l) => l.records.map((r) => r.label)))];
   rows.push({
-    label: `Scam, phishing & sanctions lists${lists ? ` (${lists} on Arkiv)` : ""}`,
+    label: "On a scam, phishing or sanctions list?",
     status: listed.length ? "fail" : "pass",
-    value: listed.length ? "Listed" : s.registry.reachable ? "Not listed" : "Not listed (offline copy)",
+    value: listed.length ? "Yes" : s.registry.reachable ? `No · ${listNames.length} lists` : "No (offline copy)",
+    hint: s.registry.reachable
+      ? `Checked privately against ${listNames.length} public lists mirrored on Arkiv: ${listNames.join("; ")}. Only a bucket number was sent; matching ran on this computer.`
+      : "Arkiv didn't answer, so the copy bundled with Satya was used.",
   });
   const brand = pick("phishing", /^(Looks like|Page says|Claims to be the Government|Bank login page|Site has no domain)/);
   rows.push({ label: "Pretends to be a known brand or government", status: sev(brand), value: brand.length ? "Yes" : "No" });
@@ -271,7 +276,7 @@ function Checks({ rows }: { rows: Row[] }) {
       <div className="eyebrow">Checks</div>
       <ul className="checks">
         {rows.map((r) => (
-          <li key={r.label} className={`chk ${r.status}`}>
+          <li key={r.label} className={`chk ${r.status}`} title={r.hint}>
             <span className="chk-mark" aria-hidden>{STATUS_MARK[r.status]}</span>
             <span className="chk-label">{r.label}</span>
             <span className="chk-value">{r.value}</span>
