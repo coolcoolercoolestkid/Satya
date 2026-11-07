@@ -24,12 +24,6 @@ function withTimeout<T>(p: Promise<T>, fallback: T, ms = LOOKUP_MS): Promise<T> 
 const timedFetch: typeof fetch = (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(LOOKUP_MS - 1000) });
 const EXPLORER = "https://rabdi.explorer.arkiv.network";
 
-const MEANING: Record<CredibilityResult["level"], string> = {
-  trustworthy: "Independent evidence vouches for this site.",
-  unverified: "Nothing wrong found, but nothing vouches for it yet.",
-  careful: "Warning signs. Don't enter passwords, OTPs or card details.",
-  "high-risk": "Likely a scam. Don't pay, log in or type anything here.",
-};
 
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -83,7 +77,13 @@ function Pointer({ f, tabId }: { f: Finding; tabId: number }) {
             “{f.evidence.length > 70 ? `${f.evidence.slice(0, 70)}…` : f.evidence}”
           </button>
         )}
-        <span className="ptr-src">{shortSource(f.source)}</span>
+        {f.link ? (
+          <a className="ptr-src" href={f.link} target="_blank" rel="noreferrer">
+            {shortSource(f.source)} ↗
+          </a>
+        ) : (
+          <span className="ptr-src">{shortSource(f.source)}</span>
+        )}
       </div>
       {f.weight > 0 && f.check !== "ai" && f.check !== "identity" && (
         <span className={`ptr-pts ${f.severity}`}>{sign}{f.weight}</span>
@@ -196,6 +196,9 @@ interface Row {
   value: string;
   /** Shown on hover: what exactly was checked. */
   hint?: string;
+  /** Where the answer came from, and a link to see the raw evidence. */
+  via?: string;
+  link?: string;
 }
 
 const LISTED = /^(Known phishing site|Listed as a |Wallet on )/;
@@ -210,62 +213,89 @@ function checklist(s: Done): Row[] {
 
   const listed = f.filter((x) => LISTED.test(x.title));
   const listNames = [...new Set(s.registry.lookups.flatMap((l) => l.records.map((r) => r.label)))];
+  const domainLookup = s.registry.lookups.find((l) => l.kind === "domain");
+  const firstRecord = domainLookup?.records[0];
   rows.push({
-    label: "On a scam, phishing or sanctions list?",
+    label: "Scam & phishing lists",
     status: listed.length ? "fail" : "pass",
-    value: listed.length ? "Yes" : s.registry.reachable ? `No · ${listNames.length} lists` : "No (offline copy)",
+    value: listed.length ? "LISTED" : s.registry.reachable ? `Clear · ${listNames.length}` : "Clear (offline)",
     hint: s.registry.reachable
-      ? `Checked privately against ${listNames.length} public lists mirrored on Arkiv: ${listNames.join("; ")}. Only a bucket number was sent; matching ran on this computer.`
+      ? `Checked against ${listNames.length} public lists mirrored on Arkiv: ${listNames.join("; ")}. Only bucket ${domainLookup?.bucket ?? ""} was requested; matching ran on this computer.`
       : "Arkiv didn't answer, so the copy bundled with Satya was used.",
+    via: s.registry.reachable && domainLookup ? `Arkiv · bucket ${domainLookup.bucket}` : "Bundled lists",
+    link: firstRecord ? `${EXPLORER}/entity/${firstRecord.key}` : undefined,
   });
   const brand = pick("phishing", /^(Looks like|Page says|Claims to be the Government|Bank login page|Site has no domain)/);
-  rows.push({ label: "Pretends to be a known brand or government", status: sev(brand), value: brand.length ? "Yes" : "No" });
+  rows.push({ label: "Impersonation", status: sev(brand), value: brand.length ? "Yes" : "No", hint: "Lookalike of a known brand, or claims to be government or a bank off an official domain." });
   const words = f.filter((x) => x.check === "scam" && x.severity !== "info" && x.severity !== "good");
-  rows.push({ label: "Scam, threat or extortion wording", status: sev(words), value: words.length ? `${words.length} found` : "None" });
+  rows.push({ label: "Scam wording", status: sev(words), value: words.length ? `${words.length} found` : "None", hint: "Fake jobs, fees to withdraw, sextortion, ransom notes, fake fines, seed-phrase requests." });
   const forms = pick("page", /^(Asks you to type|Form sends|Collects|Asks for passwords|Asks you to type your wallet)/);
-  rows.push({ label: "Asks for OTP, PIN, card, Aadhaar or seed phrase", status: sev(forms), value: forms.length ? "Yes" : "No" });
+  rows.push({ label: "Asks for secrets", status: sev(forms), value: forms.length ? "Yes" : "No", hint: "OTP, PIN, card number, Aadhaar, password or seed phrase fields." });
   const malware = pick("page", /(miner|invisible frames|scrambled code|download|app \(\.apk\)|installer)/i);
-  rows.push({ label: "Malware signs (miners, hidden frames, downloads)", status: sev(malware), value: malware.length ? `${malware.length} found` : "None" });
+  rows.push({ label: "Malware signs", status: sev(malware), value: malware.length ? `${malware.length} found` : "None", hint: "Crypto miners, hidden frames, obfuscated code, risky downloads." });
   const plain = pick(null, /without encryption/);
-  rows.push({ label: "Encrypted connection (HTTPS)", status: plain.length ? "fail" : s.page.url.startsWith("https:") ? "pass" : "warn", value: plain.length || !s.page.url.startsWith("https:") ? "No" : "Yes" });
+  const https = !plain.length && s.page.url.startsWith("https:");
+  rows.push({ label: "HTTPS", status: plain.length ? "fail" : https ? "pass" : "warn", value: https ? "Yes" : "No" });
 
   const shared = f.find((x) => /^Hosted on .+, where anyone can make a site$/.test(x.title));
-  const deepRow = (label: string, re: RegExp) => {
+  /** Rows answered by an outside service: value, plus where it came from and a link to check it. */
+  const sourced = (label: string, re: RegExp, value: (hit: Finding) => string, via: string) => {
     if (!s.deep) return rows.push({ label, status: "skip", value: "Full check" });
-    if (s.pending) return rows.push({ label, status: "skip", value: "Checking…" });
+    if (s.pending) return rows.push({ label, status: "skip", value: "…" });
     const hit = pick("records", re)[0];
-    if (shared && hit?.severity === "info" && /hosting service/.test(hit.detail ?? "")) return rows.push({ label, status: "value", value: "Belongs to the host" });
-    rows.push({ label, status: hit ? (hit.severity === "good" ? "pass" : hit.severity === "info" ? "value" : sev([hit])) : "value", value: hit ? shortValue(hit.title) : "Unknown" });
+    if (!hit) return rows.push({ label, status: "value", value: "No answer", via });
+    if (shared && hit.severity === "info" && /hosting service/.test(hit.detail ?? "")) return rows.push({ label, status: "value", value: "Host's, not this site's", via });
+    rows.push({
+      label,
+      status: hit.severity === "good" ? "pass" : hit.severity === "info" ? "value" : sev([hit]),
+      value: value(hit),
+      hint: hit.detail,
+      via: shortVia(hit.source),
+      link: hit.link,
+    });
   };
-  deepRow("Domain age", /^Domain is/);
-  deepRow("Certificate", /certificate/i);
-  deepRow("History online", /^(Online since|Online for|First seen|The Internet Archive has never)/);
+  const dateIn = (t?: string) => /\d{4}-\d{2}-\d{2}/.exec(t ?? "")?.[0];
+  sourced("Registered", /^Domain is/, (h) => dateIn(h.detail) ?? shortValue(h.title), "RDAP");
+  sourced("Certificate", /certificate/i, (h) => shortValue(h.title), "Cert Spotter");
+  sourced("First archived", /^(Online since|Online for|First seen|The Internet Archive has never)/, (h) => dateIn(h.detail) ?? "Never", "Internet Archive");
   if (s.deep && !s.pending) {
     const ens = f.find((x) => / links to this site$/.test(x.title));
-    rows.push({ label: "Its ENS name links back here", status: ens ? "pass" : "value", value: ens ? ens.title.replace(" links to this site", "") : "No" });
-  }
-  if (s.contracts) {
     rows.push({
-      label: "Contracts on page verified (Sourcify on Arkiv)",
-      status: "value",
-      value: `${s.contracts.verified.length} of ${s.contracts.asked}`,
+      label: "Brand's ENS name",
+      status: ens ? "pass" : "value",
+      value: ens ? ens.title.replace(" links to this site", "") : "None",
+      hint: "Whether <brand>.eth lists this site as its website. Only the name's owner can set that.",
+      via: ens ? "ENS" : undefined,
+      link: ens?.link,
     });
   }
-  if (s.deep && s.images) {
-    rows.push({ label: "Images with AI / camera labels", status: "value", value: `${s.images.creds.length + s.images.metadata.length} of ${s.images.checked}` });
+  if (s.contracts) {
+    rows.push({ label: "Contracts verified", status: "value", value: `${s.contracts.verified.length}/${s.contracts.asked}`, via: "Sourcify on Arkiv" });
+  }
+  if (s.deep && s.images && s.images.checked > 0) {
+    rows.push({ label: "Image labels", status: "value", value: `${s.images.creds.length + s.images.metadata.length}/${s.images.checked}`, via: "C2PA" });
   }
   return rows;
 }
 
+/** One-line source names for the checks list. */
+function shortVia(source: string): string {
+  if (/^RDAP · /.test(source)) return `RDAP · ${source.slice(7).replace(/^rdap\./, "")}`;
+  if (/Cert Spotter/.test(source)) return "CT logs · Cert Spotter";
+  if (/Internet Archive|Wayback/.test(source)) return "web.archive.org";
+  return source;
+}
+
 /** Short values for the checks list. */
 function shortValue(title: string): string {
-  if (/only proves domain control/.test(title)) return "Domain-only (DV)";
-  const ov = /verifies the company behind the site ((OV|EV))/.exec(title);
-  if (ov) return `Company-verified (${ov[1]})`;
-  if (/only d+ days? old/.test(title)) return title.replace(/^HTTPS certificate is /, "");
+  if (/only proves domain control/.test(title)) return "DV (domain only)";
+  const ov = /verifies the company behind the site \((OV|EV)\)/.exec(title);
+  if (ov) return `${ov[1]} (company checked)`;
+  const young = /only (\d+) days? old/.exec(title);
+  if (young) return `New: ${young[1]}d old`;
   if (/^No valid HTTPS certificate/.test(title)) return "None found";
-  if (/never captured/.test(title)) return "Never archived";
-  return title.replace(/^Domain is /, "").replace(/^Online since (d{4}).*/, "since $1").replace(/^First seen online /, "");
+  if (/never captured/.test(title)) return "Never";
+  return title.replace(/^Domain is /, "").replace(/^Online since (\d{4}).*/, "$1").replace(/^First seen online /, "");
 }
 
 const STATUS_MARK: Record<Status, string> = { pass: "✓", fail: "✕", warn: "!", value: "·", skip: "…" };
@@ -278,7 +308,17 @@ function Checks({ rows }: { rows: Row[] }) {
         {rows.map((r) => (
           <li key={r.label} className={`chk ${r.status}`} title={r.hint}>
             <span className="chk-mark" aria-hidden>{STATUS_MARK[r.status]}</span>
-            <span className="chk-label">{r.label}</span>
+            <span className="chk-label">
+              {r.label}
+              {r.via &&
+                (r.link ? (
+                  <a className="chk-via" href={r.link} target="_blank" rel="noreferrer" title="Open the source record">
+                    {r.via} ↗
+                  </a>
+                ) : (
+                  <span className="chk-via">{r.via}</span>
+                ))}
+            </span>
             <span className="chk-value">{r.value}</span>
           </li>
         ))}
@@ -287,18 +327,6 @@ function Checks({ rows }: { rows: Row[] }) {
   );
 }
 
-/** One sentence on why the score is what it is. */
-function reason(s: Done): string {
-  const f = s.result.findings;
-  const shared = f.find((x) => /^Hosted on .+, where anyone can make a site$/.test(x.title));
-  const vouch = f.filter((x) => x.severity === "good" && x.check !== "ai" && x.check !== "identity");
-  const bad = f.filter((x) => x.check !== "ai" && x.check !== "identity" && (x.severity === "danger" || x.severity === "warning"));
-  if (f.some((x) => LISTED.test(x.title))) return "It's on a published scam or sanctions list.";
-  if (bad.length) return `${bad.length} warning sign${bad.length > 1 ? "s" : ""} below.`;
-  if (vouch.length) return `Vouched for by: ${vouch.map((x) => x.title.toLowerCase()).slice(0, 2).join("; ")}.`;
-  if (shared) return `${shared.title.replace(/^Hosted on /, "Hosted on ").replace(/, where anyone can make a site$/, "")}, where anyone can make a site, so nothing vouches for this one yet.`;
-  return s.deep ? "Nothing wrong, but no independent evidence (age, company certificate, history) vouches for it." : "Nothing wrong so far, but the quick check can't vouch for a site. Run the full check.";
-}
 
 /** Score as a ring: the arc is the score out of 100. */
 function ScoreRing({ score, level }: { score: number; level: CredibilityResult["level"] }) {
@@ -390,7 +418,9 @@ function AiTextStatus({ ai }: { ai: AiText }) {
 function Receipt({ s, onDeep, aiText }: { s: Done; onDeep: () => void; aiText: AiText }) {
   const { result } = s;
   const wrong = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && (f.severity === "danger" || f.severity === "warning"));
-  const ai = [...(aiText.status === "done" ? aiText.findings : []), ...result.findings.filter((f) => f.check === "ai" && !f.title.startsWith("Checked "))];
+  const ai = [...(aiText.status === "done" ? aiText.findings : []), ...result.findings.filter((f) => f.check === "ai" && !f.title.startsWith("Checked "))].filter(
+    (f) => !/^Not enough text/.test(f.title),
+  );
   const people = result.findings.filter((f) => f.check === "identity" && f.severity !== "info");
   const notes = result.findings.filter((f) => f.check !== "ai" && f.check !== "identity" && f.severity === "info");
   const conf = confidence(s);
@@ -402,14 +432,12 @@ function Receipt({ s, onDeep, aiText }: { s: Done; onDeep: () => void; aiText: A
           <ScoreRing score={result.score} level={result.level} />
           <div className="verdict-text">
             <div className={`chip ${result.level}`}>{result.label}</div>
-            <p className="meaning">{MEANING[result.level]}</p>
             <div className="meta">
               <span className={`conf ${conf.tone}`}>{conf.label}</span>
               <span className="mode">{s.pending ? "Full check running…" : s.deep ? "Full check" : "Quick check"}</span>
             </div>
           </div>
         </div>
-        <p className="why">{reason(s)}</p>
         <Breakdown s={s} />
         <Section title={`What's wrong (${wrong.length})`} items={wrong} tabId={s.tabId} />
         <Checks rows={checklist(s)} />

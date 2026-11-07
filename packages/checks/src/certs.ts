@@ -95,7 +95,8 @@ export async function lookupCertificates(url: string, fetchImpl: typeof fetch = 
       `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(host)}&expand=issuer`,
     );
     if (!res.ok) return []; // rate-limited or down: say nothing rather than guess
-    return certificateFindings(host, (await res.json()) as Issuance[]);
+    const link = `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(host)}&expand=issuer`;
+    return certificateFindings(host, (await res.json()) as Issuance[]).map((f) => ({ ...f, link }));
   } catch {
     return [];
   }

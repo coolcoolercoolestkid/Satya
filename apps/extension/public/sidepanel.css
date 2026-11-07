@@ -120,6 +120,12 @@ button { font: inherit; cursor: pointer; }
 .chk.warn .chk-mark, .chk.warn .chk-value { color: var(--warn); }
 .chk.value .chk-mark, .chk.skip .chk-mark { color: var(--ink-mute); }
 .chk.skip .chk-label { color: var(--ink-mute); }
+.chk-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.chk-via { font: 10px var(--mono); color: var(--ink-mute); text-decoration: none; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.chk-via { color: #8fa32a; }
+a.chk-via:hover { color: var(--sig); text-decoration: underline; }
+a.ptr-src { color: #8fa32a; text-decoration: none; }
+a.ptr-src:hover { color: var(--sig); text-decoration: underline; }
 
 /* Collapsed details */
 .how { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }

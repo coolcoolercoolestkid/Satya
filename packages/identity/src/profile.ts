@@ -247,6 +247,7 @@ export async function checkSiteEns(host: string, ens: EnsResolver): Promise<Find
         title: `${name} links to this site`,
         detail: `The ENS name ${name} lists ${linked} as its website. Only the name's owner can set that.`,
         source: `ENS record "url" of ${name}`,
+        link: `https://app.ens.domains/${name}?tab=records`,
         weight: 15,
       }];
     }

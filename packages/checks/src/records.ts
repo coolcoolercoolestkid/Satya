@@ -90,7 +90,9 @@ export async function lookupDomainAge(
     const res = await fetchImpl(url, { headers: { accept: "application/rdap+json" } });
     if (!res.ok) return undefined;
     const date = registrationDateFromRdap((await res.json()) as RdapResponse);
-    return date ? domainAgeFinding(domain, date) : undefined;
+    if (!date) return undefined;
+    // The exact registry record this came from, so anyone can check it.
+    return { ...domainAgeFinding(domain, date), source: `RDAP · ${new URL(url).host}`, link: url };
   } catch {
     return undefined;
   }
@@ -161,7 +163,7 @@ export function archiveFinding(domain: string, firstSeen: Date | undefined, now 
   return {
     check: "records",
     severity: points ? "good" : "info",
-    title: years >= 1 ? `Online since ${firstSeen.getUTCFullYear()} (${years}+ year${years === 1 ? "" : "s"} of history)` : `Online for ${Math.round(days / 30)} months`,
+    title: years >= 1 ? `Online since ${firstSeen.getUTCFullYear()}` : `Online for ${Math.round(days / 30)} months`,
     detail: `The Internet Archive's first capture of ${domain} is from ${when}.`,
     source,
     weight: points,
@@ -176,7 +178,9 @@ export async function lookupArchiveHistory(host: string, fetchImpl: typeof fetch
     const body = (await res.json()) as { archived_snapshots?: { closest?: { timestamp?: string; available?: boolean } } };
     const ts = body.archived_snapshots?.closest?.timestamp;
     const first = ts ? new Date(`${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T00:00:00Z`) : undefined;
-    return archiveFinding(domain, first && !Number.isNaN(first.getTime()) ? first : undefined);
+    const f = archiveFinding(domain, first && !Number.isNaN(first.getTime()) ? first : undefined);
+    // Link to the first capture itself, or to the archive's calendar when there is none.
+    return { ...f, link: ts ? `https://web.archive.org/web/${ts}/${domain}` : `https://web.archive.org/web/*/${domain}` };
   } catch {
     return undefined;
   }

@@ -17,6 +17,8 @@ export interface Finding {
   evidence?: string;
   /** Points subtracted from the credibility score (0 for good/info-only findings). */
   weight: number;
+  /** Where to see the raw evidence yourself (registry record, archive snapshot, log search). */
+  link?: string;
 }
 
 /** Structural facts about the page, read by the content script (no page text). */
